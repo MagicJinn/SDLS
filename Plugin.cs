@@ -20,7 +20,7 @@ namespace SDLS
     public class Plugin : BaseUnityPlugin
     {
         private JsonReader jsonReader;
-        private JsonWriter jsonWriter;
+        //private JsonWriter jsonWriter;
 
         private List<string> components;
         private void Awake()
@@ -28,7 +28,8 @@ namespace SDLS
             // Plugin startup logic
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
-            jsonReader = new JsonReader(); jsonWriter = new JsonWriter();
+            jsonReader = new JsonReader();
+            //jsonWriter = new JsonWriter();
 
             TrashAllJson();
         }
@@ -57,6 +58,7 @@ namespace SDLS
             {
                 Logger.LogInfo(component);
             }
+
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
@@ -66,8 +68,23 @@ namespace SDLS
                 foreach (string filePath in filePaths)
                 {
                     string fullPath = "addon/" + subDir + "/" + filePath;
-                    string fileContent = FileHelper.ReadTextFile(fullPath + ".sdls"); // Read the sdls file
-                    if (fileContent != null) // If a file does not exist, TrashJson doesn't run
+
+                    // Attempt to read the file with ".sdls" extension
+                    string sdlsFile = FileHelper.ReadTextFile(fullPath + ".sdls");
+                    // Attempt to read the file with ".SDLS.json" extension
+                    string prefixFile = FileHelper.ReadTextFile(fullPath + "SDLS.json");
+
+                    // Choose the content based on availability of files
+                    string fileContent = sdlsFile != null ? sdlsFile : prefixFile;
+
+                    // Log a warning if both file types are found, choosing the one with ".sdls" extension
+                    if (sdlsFile != null && prefixFile != null)
+                    {
+                        Logger.LogWarning("Detected both a .sdlf and a SDLF.json file. The .sdlf file will be used.");
+                        Logger.LogWarning("Please consider removing one of these files to avoid confusion.");
+                    }
+                    Logger.LogInfo(subDir + " " + filePath);
+                    if (fileContent != null)
                     {
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
                         string trashedJson = TrashJson(fileContent, GetLastWord(fullPath));
@@ -75,25 +92,36 @@ namespace SDLS
                     }
                 }
             }
+
         }
 
         public string TrashJson(string providedJson, string name)
         {
-            // Deserialize the provided 
-            var deserializedJson = DeserializeJson(providedJson);
+            try
+            {
+                // Deserialize the provided JSON
+                var deserializedJson = DeserializeJson(providedJson);
 
-            // Deserialize the default mold data
-            string directory = components.Contains(name) ? "defaultComponents" : "default";
-            var moldData = DeserializeJson(JsonAsText(name, directory));
+                // Deserialize the default mold data
+                Logger.LogInfo(name);
+                string directory = components.Contains(name) ? "defaultComponents" : "default";
+                var moldData = DeserializeJson(JsonAsText(name, directory));
+                Logger.LogWarning(name);
+                // Apply each field found in the deserialized JSON to the mold data recursively
+                ApplyFieldsToMold(deserializedJson, moldData);
 
-            // Apply each field found in the deserialized JSON to the mold data recursively
-            ApplyFieldsToMold(deserializedJson, moldData);
+                // Serialize the updated mold data back to JSON string
+                var result = Serializer.Serialize(moldData);
 
-            // Serialize the updated mold data back to JSON string
-            var result = Serializer.Serialize(moldData);
-
-            return result;
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error occurred while processing JSON for '{name}': {ex.Message}");
+                return providedJson; // Return providedJson as fallback
+            }
         }
+
 
         private void ApplyFieldsToMold(IDictionary<string, object> jsonData, IDictionary<string, object> moldData)
         {
@@ -105,25 +133,35 @@ namespace SDLS
                 // Check if the field exists in the components list
                 if (components.Contains(fieldName))
                 {
-                    Logger.LogInfo("AAAAAAAAAAA");
                     // If the field is an array, create multiple molds based on the number of items
                     if (fieldValue is IEnumerable<object> array)
                     {
                         var newArray = new List<object>();
                         foreach (var item in array)
                         {
-                            var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                            ApplyFieldsToMold(item as IDictionary<string, object>, newMoldItem);
-                            newArray.Add(newMoldItem);
+                            if (item is IDictionary<string, object> || item is IEnumerable<KeyValuePair<string, object>>)
+                            {
+                                var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
+                                ApplyFieldsToMold(item as IDictionary<string, object>, newMoldItem);
+                                newArray.Add(newMoldItem);
+                            }
+                            else
+                            {
+                                newArray.Add(item); // Handles array with only 1 non dictionary item
+                            }
                         }
                         moldData[fieldName] = newArray;
                     }
                     else // If the field is not an array, apply the mold data directly
                     {
-                        var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                        ApplyFieldsToMold(fieldValue as IDictionary<string, object>, newMoldItem);
-                        moldData[fieldName] = newMoldItem;
+                        if (fieldValue != null)
+                        {
+                            var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
+                            ApplyFieldsToMold(fieldValue as IDictionary<string, object>, newMoldItem);
+                            moldData[fieldName] = newMoldItem;
+                        }
                     }
+
                 }
                 else // If the field is not found in the components list, apply the original field value
                 {
@@ -170,11 +208,12 @@ namespace SDLS
             return str.Split('/').Last(/* Returns only the resource name */);
 
         }
-        private void CreateJson(string trashedJson, string path)
+        private void CreateJson(string trashedJson, string path) // Creates json out of plaintext, and puts them in the addon folder next to the original
         {
             string targetPath = Application.persistentDataPath + "/" + path;
             try
             {
+                Logger.LogInfo("Created new file at " + path + ".json");
                 File.WriteAllText(targetPath + ".json", "[" + trashedJson + "]");
             }
             catch (Exception ex)
@@ -183,25 +222,29 @@ namespace SDLS
             }
         }
 
-        private string JsonAsText(string resourceName, string folderName)
+        private string JsonAsText(string resourceName, string folderName) // Method for loading embedded json resources
         {
-
             Assembly assembly = Assembly.GetExecutingAssembly();
             string fullPath = GetEmbeddedPath(folderName);
-            string fullResourceName = $"{fullPath}.{resourceName}Default.json"; // Assuming the resource file extension is always ".json"
-                                                                                // Read the embedded resource and return its 
+            string fullResourceName = $"{fullPath}.{resourceName}Default.json"; // Construct the full resource name
 
             using (Stream stream = assembly.GetManifestResourceStream(fullResourceName))
-            using (StreamReader reader = new StreamReader(stream))
             {
-                return reader.ReadToEnd();
+                if (stream == null)
+                {
+                    return null; // Return null if the embedded resource doesn't exist
+                }
+
+                using (StreamReader reader = new StreamReader(stream))
+                {
+                    return reader.ReadToEnd(); // Read and return the embedded resource
+                }
             }
         }
 
-        public List<string> GetComponents()
-        {
-            Logger.LogInfo("Hoigjaeoigjaeoigjaogejgeoiholyoageu");
 
+        public List<string> GetComponents() // Fetches a list of all files (names) in the defaultComponents folder
+        {
             string embeddedPath = GetEmbeddedPath("defaultComponents");
             var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
 
@@ -219,7 +262,7 @@ namespace SDLS
             return components;
         }
 
-        private string GetEmbeddedPath(string folderName)
+        private string GetEmbeddedPath(string folderName) // Get the path of embedded resources
         {
             string projectName = Assembly.GetExecutingAssembly().GetName().Name;
             string fullPath = $"{projectName}.{folderName}";

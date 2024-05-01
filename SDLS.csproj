@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <AssemblyName>SDLS</AssemblyName>
+    <Description>Simplified Json Data Loading to remove the need for unused fields, leading to 30%-70% less code.</Description>
+    <Version>0.0.1</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
+    <PackageReference Include="JsonFx" Version="2.0.1209.2802" />
+    <PackageReference Include="UnityEngine.Modules" Version="5.5.1" IncludeAssets="compile" />
+  </ItemGroup>
+  
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
+  <Reference Include="Sunless.Game">
+    <HintPath>dependencies/Sunless.Game.dll</HintPath>
+  </Reference>
+    <Reference Include="FailBetter.Core">
+    <HintPath>dependencies/FailBetter.Core.dll</HintPath>
+  </Reference>
+      <Reference Include="JsonFX">
+    <HintPath>dependencies/JsonFX.dll</HintPath>
+  </Reference>
+
+    <!-- Include all JSON files in the default folder -->
+    <EmbeddedResource Include="default/*.json" />
+
+    <!-- Include all files in the defaultComponents folder -->
+    <EmbeddedResource Include="defaultComponents/*.json" />
+</ItemGroup>
+
+</Project>

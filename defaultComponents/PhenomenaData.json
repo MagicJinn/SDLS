@@ -6,10 +6,7 @@
     "Subsurface": true,
     "HumanName": null,
     "Description": null,
-    "Position": {
-        "X": 0,
-        "Y": 0
-    },
+    "Position": null,
     "Radius": null,
     "DiscoveryValue": null,
     "GleamValue": 0,

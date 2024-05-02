@@ -1,0 +1,16 @@
+{
+    "World": null,
+    "Name": null,
+    "Description": null,
+    "ImageName": null,
+    "MarketAccessPermitted": false,
+    "MoveMessage": null,
+    "HideName": false,
+    "RandomPostcard": false,
+    "MapX": 0,
+    "MapY": 0,
+    "UnlocksWithQuality": null,
+    "ShowOps": false,
+    "PremiumSubRequired": false,
+    "Id": null
+}

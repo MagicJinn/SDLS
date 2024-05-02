@@ -1,0 +1,23 @@
+{
+    "SuccessEvent": null,
+    "DefaultEvent": null,
+    "RareDefaultEvent": null,
+    "RareDefaultEventChance": 0,
+    "RareSuccessEvent": null,
+    "RareSuccessEventChance": 0,
+    "ParentEvent": null,
+    "QualitiesRequired": [],
+    "Name": null,
+    "Image": null,
+    "Description": null,
+    "OwnerName": null,
+    "DateTimeCreated": null,
+    "CurrencyCost": null,
+    "ActionCost": null,
+    "RenameQualityCategory": null,
+    "ButtonText": null,
+    "Ordering": 0,
+    "Act": null,
+    "Archived": false,
+    "Id": null
+}

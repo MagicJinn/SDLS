@@ -1,0 +1,12 @@
+{
+    "Name": null,
+    "Description": null,
+    "Tooltip": null,
+    "UnlockQualityId": null,
+    "UnlockQuality": null,
+    "QualityToIncreaseId": 0,
+    "QualityToIncrease": null,
+    "IncreaseLevel": 0,
+    "AdditionalLegaciesAllowed": 0,
+    "Order": 0
+}

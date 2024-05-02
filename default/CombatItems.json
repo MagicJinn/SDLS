@@ -1,0 +1,13 @@
+{
+    "Name": null,
+    "Image": null,
+    "Description": null,
+    "AssociatedQuality": null,
+    "AssociatedQualityId": null,
+    "ExoticEffect": null,
+    "ExoticEffectName": null,
+    "Cooldown": null,
+    "IsInfinate": false,
+    "IsUsable": null,
+    "IsUsableFuncName": null
+}

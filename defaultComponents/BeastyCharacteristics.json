@@ -1,0 +1,12 @@
+{
+    "MinAttackRange": 0,
+    "MaxAttackRange": 0,
+    "AwarenessRange": 0,
+    "VisionConeRange": 0,
+    "VisionConeAngle": 0,
+    "EvadeRange": 0,
+    "IlluminationTimeToEvade": 0,
+    "ChaseTimeToSneaking": 0,
+    "CanSubmerge": false,
+    "ChanceToStartSubmerged": 0
+}

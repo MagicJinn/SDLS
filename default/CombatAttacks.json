@@ -1,0 +1,23 @@
+{
+    "Name": null,
+    "QualityRequired": null,
+    "QualityRequiredId": 0,
+    "QualityCost": null,
+    "QualityCostId": 0,
+    "ExposedQuality": null,
+    "ExposedQualityId": 0,
+    "Image": null,
+    "Description": null,
+    "RammingAttack": false,
+    "OnlyWhenExposed": false,
+    "Range": null,
+    "Orientation": 0,
+    "Arc": null,
+    "BaseHullDamage": null,
+    "BaseLifeDamage": null,
+    "ExposedQualityDamage": null,
+    "StaggerAmount": null,
+    "BaseWarmUp": null,
+    "Animation": null,
+    "AnimationNumber": 0
+}

@@ -1,0 +1,9 @@
+{
+    "SpawnCount": null,
+    "Transient": false,
+    "ActivationChance": null,
+    "Position": null,
+    "Leeway": 750,
+    "AllowedFlavours": [],
+    "DisallowedFlavours": []
+}

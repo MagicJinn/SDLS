@@ -1,0 +1,20 @@
+{
+    "Name": null,
+    "ParentTile": null,
+    "PrefabName": null,
+    "VisitedPrefabName": null,
+    "Subsurface": true,
+    "HumanName": null,
+    "Description": null,
+    "Position": {
+        "X": 0,
+        "Y": 0
+    },
+    "Radius": null,
+    "DiscoveryValue": null,
+    "GleamValue": 0,
+    "QualityEffects": [],
+    "StoryletId": null,
+    "AreaId": 0,
+    "SpawnChance": null
+}

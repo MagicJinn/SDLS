@@ -100,19 +100,23 @@ namespace SDLS
             try
             {
                 // Deserialize the provided JSON
-                var deserializedJson = DeserializeJson(providedJson);
+                String[] splitStrings = SplitJson(providedJson);
+                List<string> objectList = new List<string>();
+                foreach (String splitString in splitStrings)
+                {
+                    var deserializedJson = DeserializeJson(splitString);
+                    // Deserialize the default mold data
+                    string directory = components.Contains(name) ? "defaultComponents" : "default";
+                    var embeddedData = DeserializeJson(JsonAsText(name, directory));
+                    // Apply each field found in the deserialized JSON to the mold data recursively
+                    var returnData = ApplyFieldsToMold(deserializedJson, embeddedData);
 
-                // Deserialize the default mold data
-                Logger.LogInfo(name);
-                string directory = components.Contains(name) ? "defaultComponents" : "default";
-                var moldData = DeserializeJson(JsonAsText(name, directory));
-                Logger.LogWarning(name);
-                // Apply each field found in the deserialized JSON to the mold data recursively
-                ApplyFieldsToMold(deserializedJson, moldData);
+                    // Serialize the updated mold data back to JSON string
+                    objectList.Add(Serializer.Serialize(returnData));
+                }
 
-                // Serialize the updated mold data back to JSON string
-                var result = Serializer.Serialize(moldData);
-
+                string result = string.Join(",", objectList.ToArray());
+                //Logger.LogWarning(result);
                 return result;
             }
             catch (Exception ex)
@@ -122,9 +126,9 @@ namespace SDLS
             }
         }
 
-
-        private void ApplyFieldsToMold(IDictionary<string, object> jsonData, IDictionary<string, object> moldData)
+        private IDictionary<string, object> ApplyFieldsToMold(IDictionary<string, object> jsonData, IDictionary<string, object> mold)
         {
+            Dictionary<string, object> moldData = new Dictionary<string, object>(mold);
             foreach (var kvp in jsonData)
             {
                 var fieldName = kvp.Key;
@@ -142,14 +146,15 @@ namespace SDLS
                             if (item is IDictionary<string, object> || item is IEnumerable<KeyValuePair<string, object>>)
                             {
                                 var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                                ApplyFieldsToMold(item as IDictionary<string, object>, newMoldItem);
-                                newArray.Add(newMoldItem);
+                                var result = ApplyFieldsToMold(item as IDictionary<string, object>, newMoldItem);
+                                newArray.Add(result);
                             }
                             else
                             {
-                                newArray.Add(item); // Handles array with only 1 non dictionary item
+                                newArray.Add(item); // Handles array with only 1 non-dictionary item
                             }
                         }
+
                         moldData[fieldName] = newArray;
                     }
                     else // If the field is not an array, apply the mold data directly
@@ -157,8 +162,8 @@ namespace SDLS
                         if (fieldValue != null)
                         {
                             var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                            ApplyFieldsToMold(fieldValue as IDictionary<string, object>, newMoldItem);
-                            moldData[fieldName] = newMoldItem;
+                            var result = ApplyFieldsToMold(fieldValue as IDictionary<string, object>, newMoldItem);
+                            moldData[fieldName] = result;
                         }
                     }
 
@@ -169,8 +174,8 @@ namespace SDLS
                     if (fieldValue is IDictionary<string, object> nestedJson)
                     {
                         var nestedMoldItem = new Dictionary<string, object>();
-                        ApplyFieldsToMold(nestedJson, nestedMoldItem);
-                        moldData[fieldName] = nestedMoldItem;
+                        var result = ApplyFieldsToMold(nestedJson, nestedMoldItem);
+                        moldData[fieldName] = result;
                     }
                     // If the field is an array, apply each item's fields recursively
                     else if (fieldValue is IEnumerable<object> array)
@@ -181,8 +186,8 @@ namespace SDLS
                             if (item is IDictionary<string, object> nestedJsonItem)
                             {
                                 var newMoldItem = new Dictionary<string, object>();
-                                ApplyFieldsToMold(nestedJsonItem, newMoldItem);
-                                newArray.Add(newMoldItem);
+                                var result = ApplyFieldsToMold(nestedJsonItem, newMoldItem);
+                                newArray.Add(result);
                             }
                         }
                         moldData[fieldName] = newArray;
@@ -194,7 +199,49 @@ namespace SDLS
                     }
                 }
             }
+            return moldData;
         }
+
+        public string[] SplitJson(string jsonText)
+        {
+            var objects = new List<string>();
+
+            int depth = 0;
+            int startIndex = 0;
+            bool isInObject = false; // Flag to track if inside a JSON object
+
+            for (int i = 0; i < jsonText.Length; i++)
+            {
+                char currentChar = jsonText[i];
+
+                if (currentChar == '{')
+                {
+                    depth++;
+                    isInObject = true;
+                }
+                else if (currentChar == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        isInObject = false;
+                    }
+                }
+                else if (currentChar == ',' && depth == 0 && !isInObject)
+                {
+                    // Ignore commas that are within nested objects
+                    objects.Add(jsonText.Substring(startIndex, i - startIndex));
+                    startIndex = i + 1;
+                }
+            }
+
+            // Add the last JSON object
+            objects.Add(jsonText.Substring(startIndex));
+
+            return objects.ToArray();
+        }
+
+
 
 
 
@@ -226,12 +273,13 @@ namespace SDLS
         {
             Assembly assembly = Assembly.GetExecutingAssembly();
             string fullPath = GetEmbeddedPath(folderName);
-            string fullResourceName = $"{fullPath}.{resourceName}Default.json"; // Construct the full resource name
+            string fullResourceName = $"{fullPath}.{resourceName}.json"; // Construct the full resource name
 
             using (Stream stream = assembly.GetManifestResourceStream(fullResourceName))
             {
                 if (stream == null)
                 {
+                    Logger.LogWarning("JsonAsText tried to get resource that doesn't exits: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -254,7 +302,7 @@ namespace SDLS
                 if (name.StartsWith(embeddedPath))
                 {
                     var component = name.Substring(embeddedPath.Length);
-                    component = component.TrimStart('.').Replace("Default.json", "");
+                    component = component.TrimStart('.').Replace(".json", "");
                     components.Add(component);
                 }
             }

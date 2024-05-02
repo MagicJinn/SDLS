@@ -20,16 +20,13 @@ namespace SDLS
     public class Plugin : BaseUnityPlugin
     {
         private JsonReader jsonReader;
-        //private JsonWriter jsonWriter;
 
-        private List<string> components;
+        private List<string> components; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
         private void Awake()
         {
-            // Plugin startup logic
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
             jsonReader = new JsonReader();
-            //jsonWriter = new JsonWriter();
 
             TrashAllJson();
         }
@@ -54,10 +51,6 @@ namespace SDLS
             };
 
             components = GetComponents();
-            foreach (string component in components)
-            {
-                Logger.LogInfo(component);
-            }
 
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
@@ -92,7 +85,6 @@ namespace SDLS
                     }
                 }
             }
-
         }
 
         public string TrashJson(string providedJson, string name)
@@ -126,83 +118,65 @@ namespace SDLS
             }
         }
 
-        private IDictionary<string, object> ApplyFieldsToMold(IDictionary<string, object> jsonData, IDictionary<string, object> mold)
+        private IDictionary<string, object> ApplyFieldsToMold(IDictionary<string, object> jsonData, IDictionary<string, object> moldData)
         {
-            Dictionary<string, object> moldData = new Dictionary<string, object>(mold);
+            var mold = new Dictionary<string, object>(moldData);
             foreach (var kvp in jsonData)
             {
-                var fieldName = kvp.Key;
-                var fieldValue = kvp.Value;
+                var basin = kvp.Key;
+                var crucible = kvp.Value;
 
                 // Check if the field exists in the components list
-                if (components.Contains(fieldName))
+                if (components.Contains(basin))
                 {
-                    // If the field is an array, create multiple molds based on the number of items
-                    if (fieldValue is IEnumerable<object> array)
+                    if (crucible is IEnumerable<object> array)
                     {
-                        var newArray = new List<object>();
-                        foreach (var item in array)
-                        {
-                            if (item is IDictionary<string, object> || item is IEnumerable<KeyValuePair<string, object>>)
-                            {
-                                var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                                var result = ApplyFieldsToMold(item as IDictionary<string, object>, newMoldItem);
-                                newArray.Add(result);
-                            }
-                            else
-                            {
-                                newArray.Add(item); // Handles array with only 1 non-dictionary item
-                            }
-                        }
-
-                        moldData[fieldName] = newArray;
+                        mold[basin] = HandleArray(array, basin);
                     }
-                    else // If the field is not an array, apply the mold data directly
-                    {
-                        if (fieldValue != null)
-                        {
-                            var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
-                            var result = ApplyFieldsToMold(fieldValue as IDictionary<string, object>, newMoldItem);
-                            moldData[fieldName] = result;
-                        }
-                    }
-
-                }
-                else // If the field is not found in the components list, apply the original field value
-                {
-                    // If the field is a nested object, recursively apply its fields
-                    if (fieldValue is IDictionary<string, object> nestedJson)
-                    {
-                        var nestedMoldItem = new Dictionary<string, object>();
-                        var result = ApplyFieldsToMold(nestedJson, nestedMoldItem);
-                        moldData[fieldName] = result;
-                    }
-                    // If the field is an array, apply each item's fields recursively
-                    else if (fieldValue is IEnumerable<object> array)
-                    {
-                        var newArray = new List<object>();
-                        foreach (var item in array)
-                        {
-                            if (item is IDictionary<string, object> nestedJsonItem)
-                            {
-                                var newMoldItem = new Dictionary<string, object>();
-                                var result = ApplyFieldsToMold(nestedJsonItem, newMoldItem);
-                                newArray.Add(result);
-                            }
-                        }
-                        moldData[fieldName] = newArray;
-                    }
-                    // If the field is a scalar value, update the mold data with the field value
                     else
                     {
-                        moldData[fieldName] = fieldValue;
+                        mold[basin] = HandleObject(crucible, basin);
                     }
                 }
+                else
+                {
+                    mold[basin] = HandleDefault(crucible);
+                }
             }
-            return moldData;
+            return mold;
         }
 
-        public string[] SplitJson(string jsonText)
+        private object HandleArray(IEnumerable<object> array, string fieldName)
+        {
+            var newArray = new List<object>();
+            foreach (var item in array)
+            {
+                newArray.Add(item is IDictionary<string, object> itemDict
+                    ? HandleObject(itemDict, fieldName)
+                    : item);
+            }
+            return newArray;
+        }
+
+        private object HandleObject(object fieldValue, string fieldName)
+        {
+            var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
+            return fieldValue is IDictionary<string, object> fieldValueDict
+                ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
+                : fieldValue;
+        }
+
+        private object HandleDefault(object fieldValue)
+        {
+            return fieldValue is IDictionary<string, object> nestedJson
+                ? ApplyFieldsToMold(nestedJson, new Dictionary<string, object>())
+                : fieldValue is IEnumerable<object> array
+                    ? array.Select(HandleDefault).ToList()
+                    : fieldValue;
+        }
+
+
+        public string[] SplitJson(string jsonText) // Splits json objects from eachother, so they can be processed individually
         {
             var objects = new List<string>();
 

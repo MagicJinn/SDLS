@@ -1,17 +1,12 @@
 ﻿using BepInEx;
 using UnityEngine;
-//using BepInEx.Logging;
-using HarmonyLib;
-using JsonFx.Json;
-using FailBetter.Core;
-using Sunless.Game.Utilities;
-using Mono.Cecil;
 using System;
 using System.IO;
-using System.Collections.Generic;
-using System.Reflection;
 using System.Linq;
-using FailBetter.Core.Result;
+using System.Reflection;
+using System.Collections.Generic;
+using JsonFx.Json;
+using Sunless.Game.Utilities;
 
 namespace SDLS
 {
@@ -33,6 +28,8 @@ namespace SDLS
 
         private void TrashAllJson()
         {
+            InitializationLine();
+
             string[] filePaths = { // All possible files able to be modded (with .json removed)
             "entities/qualities",
             "entities/areas",
@@ -76,7 +73,6 @@ namespace SDLS
                         Logger.LogWarning("Detected both a .sdlf and a SDLF.json file. The .sdlf file will be used.");
                         Logger.LogWarning("Please consider removing one of these files to avoid confusion.");
                     }
-                    Logger.LogInfo(subDir + " " + filePath);
                     if (fileContent != null)
                     {
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
@@ -108,7 +104,6 @@ namespace SDLS
                 }
 
                 string result = string.Join(",", objectList.ToArray());
-                //Logger.LogWarning(result);
                 return result;
             }
             catch (Exception ex)
@@ -215,10 +210,6 @@ namespace SDLS
             return objects.ToArray();
         }
 
-
-
-
-
         private Dictionary<string, object> DeserializeJson(string jsonText)
         {
             return jsonReader.Read<Dictionary<string, object>>(jsonText);
@@ -253,7 +244,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    Logger.LogWarning("JsonAsText tried to get resource that doesn't exits: " + fullResourceName);
+                    Logger.LogWarning("JsonAsText tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -289,6 +280,31 @@ namespace SDLS
             string projectName = Assembly.GetExecutingAssembly().GetName().Name;
             string fullPath = $"{projectName}.{folderName}";
             return fullPath;
+        }
+
+        private void InitializationLine()
+        {
+            string[] alternateLines = {
+        "Querrying ChatGPT for better Json.",
+        "Help! If you're seeing this, I'm the guy he trapped within this program to rewrite your Json!.",
+        "This is an alternate line 3.",
+        "I'm sorry, but as an AI language model.",
+        "Error 404: Humor not found... in your JSON.",
+        "Adding a lot of useless stuff. Like, a LOT of useless stuff.",
+        "Adding a mascot that's more powerful than all the others, found in London, as is tradition.",
+        "Compiling Json files into Json files into Json files into Json files into Json files into Json files into Json files...",
+        "You better be using .sdls files.",
+        "Adding gluten to your Json.",
+        "Jason? JASON!",
+        "Adding exponentially more data.",
+        "Json is honestly just a Trojan Horse to smuggle Javascript into other languages.",
+        "In Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\n   Down to a sunless sea.",
+        "She Simplifying my Data Loading till I Sunless",
+        "Screw it. Grok, give me some more jokes for the Json."
+            };
+
+            int randomIndex = new System.Random().NextDouble() < 0.1 ? new System.Random().Next(0, alternateLines.Length) : -1;
+            Logger.LogInfo(randomIndex != -1 ? alternateLines[randomIndex] : "Compiling SDLS files into Json.");
         }
     }
 }

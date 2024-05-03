@@ -43,6 +43,7 @@ Additionally, **COMMENTS ARE NOT SUPPORTED**.
 * Mod compatibility. Have a config option to merge mods to resolve compatibility issues.
 * Additional loaded data support. Currently, I only officially support Qualities and Events, but the other 11 moddable jsons will be refined.
 * Sunless Skies support. I do not own Sunless Skies, but will strive to make this mod compatible with it.
+* Comment support? (Removing comments from the .json during conversion).
 
 **Special thanks:**
 

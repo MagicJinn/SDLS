@@ -21,12 +21,11 @@
   <Reference Include="Sunless.Game">
     <HintPath>dependencies/Sunless.Game.dll</HintPath>
   </Reference>
-    <Reference Include="FailBetter.Core">
-    <HintPath>dependencies/FailBetter.Core.dll</HintPath>
-  </Reference>
       <Reference Include="JsonFX">
     <HintPath>dependencies/JsonFX.dll</HintPath>
   </Reference>
+    <!-- Include the default settings ini file as fallback -->
+    <EmbeddedResource Include="SDLS_Config.ini" />
 
     <!-- Include all JSON files in the default folder -->
     <EmbeddedResource Include="default/*.json" />

@@ -364,7 +364,6 @@ namespace SDLS
                 }
             }
         }
-
         private void GetGameName()
         {
             string currentProcessName = Process.GetCurrentProcess().ProcessName;

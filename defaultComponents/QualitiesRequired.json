@@ -1,6 +1,7 @@
 {
     "DifficultyLevel": null,
     "DifficultyAdvanced": null,
+    "VisibleWhenRequirementFailed": true,
     "MinLevel": null,
     "MaxLevel": null,
     "MinAdvanced": null,

@@ -4,24 +4,40 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Diagnostics;
 using System.Collections.Generic;
 using JsonFx.Json;
 using Sunless.Game.Utilities;
+using Sunless.Game.ApplicationProviders;
 
 namespace SDLS
 {
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
-    [BepInProcess("Sunless Sea.exe")]
     public class Plugin : BaseUnityPlugin
     {
-        private JsonReader jsonReader;
+        private string gameName;
 
+        // Config options
+        private const string CONFIG = "SDLS_Config.ini";
+        private bool fMode; private float fChance;
+
+        private bool doMerge;
+        private bool logConflicts;
+
+        private JsonReader jsonReader; private JsonWriter jsonWriter;
         private List<string> components; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
+
+        private IDictionary<int, object> mergedMods = new Dictionary<int, object>();
+
         private void Awake()
         {
+            GetGameName();
+
+            LoadConfig();
+
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
-            jsonReader = new JsonReader();
+            jsonReader = new JsonReader(); jsonWriter = new JsonWriter();
 
             TrashAllJson();
         }
@@ -77,13 +93,27 @@ namespace SDLS
                     {
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
                         string trashedJson = TrashJson(fileContent, GetLastWord(fullPath));
-                        CreateJson(trashedJson, fullPath);
+                        if (!doMerge)
+                        {
+                            CreateJson(trashedJson, fullPath);
+                        }
+                        else
+                        {
+                            string targetPath = Application.persistentDataPath + "/";
+                            string jsonFilePath = targetPath + fullPath + ".json";
+
+                            if (File.Exists(jsonFilePath))
+                            {
+                                Logger.LogWarning("Removing " + filePath + " before merging mods.");
+                                File.Delete(jsonFilePath); // Delete any files that exist, that might screw up SDLS merge loading
+                            }
+                        }
                     }
                 }
             }
         }
 
-        public string TrashJson(string providedJson, string name)
+        private string TrashJson(string providedJson, string name)
         {
             try
             {
@@ -92,16 +122,27 @@ namespace SDLS
                 List<string> objectList = new List<string>();
                 foreach (String splitString in splitStrings)
                 {
-                    var deserializedJson = DeserializeJson(splitString);
+                    var deserializedJson = Deserialize(splitString);
                     // Deserialize the default mold data
                     string directory = components.Contains(name) ? "defaultComponents" : "default";
-                    var embeddedData = DeserializeJson(JsonAsText(name, directory));
+                    var embeddedData = Deserialize(JsonAsText(name, directory));
+                    if (doMerge)
+                    {
+                        MergeMods(deserializedJson, mergedMods);
+                        continue;
+                    } // Rest is skipped
+
                     // Apply each field found in the deserialized JSON to the mold data recursively
                     var returnData = ApplyFieldsToMold(deserializedJson, embeddedData);
 
                     // Serialize the updated mold data back to JSON string
-                    objectList.Add(Serializer.Serialize(returnData));
+                    objectList.Add(Serialize(returnData));
                 }
+
+                if (doMerge)
+                {
+                    return null;
+                } // The rest is skipped
 
                 string result = string.Join(",", objectList.ToArray());
                 return result;
@@ -155,7 +196,7 @@ namespace SDLS
 
         private object HandleObject(object fieldValue, string fieldName)
         {
-            var newMoldItem = DeserializeJson(JsonAsText(fieldName, "defaultComponents"));
+            var newMoldItem = Deserialize(JsonAsText(fieldName, "defaultComponents"));
             return fieldValue is IDictionary<string, object> fieldValueDict
                 ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
                 : fieldValue;
@@ -170,8 +211,22 @@ namespace SDLS
                     : fieldValue;
         }
 
+        private void MergeMods(IDictionary<string, object> inputData, IDictionary<int, object> destination)
+        {
+            int Id = (int)inputData["Id"];
+            Logger.LogInfo("Id: " + Id);
+            if (!destination.ContainsKey(Id))
+            {
+                destination.Add(Id, inputData);
+            }
+            else
+            {
+                Logger.LogWarning("AAAA");
+            }
 
-        public string[] SplitJson(string jsonText) // Splits json objects from eachother, so they can be processed individually
+        }
+
+        private string[] SplitJson(string jsonText) // Splits json objects from eachother, so they can be processed individually
         {
             var objects = new List<string>();
 
@@ -210,7 +265,12 @@ namespace SDLS
             return objects.ToArray();
         }
 
-        private Dictionary<string, object> DeserializeJson(string jsonText)
+        private string Serialize(object data)
+        {
+            return new JsonWriter().Write(data);
+        }
+
+        private Dictionary<string, object> Deserialize(string jsonText)
         {
             return jsonReader.Read<Dictionary<string, object>>(jsonText);
         }
@@ -220,6 +280,7 @@ namespace SDLS
             return str.Split('/').Last(/* Returns only the resource name */);
 
         }
+
         private void CreateJson(string trashedJson, string path) // Creates json out of plaintext, and puts them in the addon folder next to the original
         {
             string targetPath = Application.persistentDataPath + "/" + path;
@@ -236,15 +297,21 @@ namespace SDLS
 
         private string JsonAsText(string resourceName, string folderName) // Method for loading embedded json resources
         {
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            string fullPath = GetEmbeddedPath(folderName);
+
+            string fullPath = GetEmbeddedPath(gameName + "." + folderName);
             string fullResourceName = $"{fullPath}.{resourceName}.json"; // Construct the full resource name
 
-            using (Stream stream = assembly.GetManifestResourceStream(fullResourceName))
+            return ReadTextResource(fullResourceName);
+        }
+
+        private string ReadTextResource(string resource)
+        {
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            using (Stream stream = assembly.GetManifestResourceStream(resource))
             {
                 if (stream == null)
                 {
-                    Logger.LogWarning("JsonAsText tried to get resource that doesn't exist: " + fullResourceName);
+                    Logger.LogWarning("Tried to get resource that doesn't exist: " + resource);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -255,8 +322,7 @@ namespace SDLS
             }
         }
 
-
-        public List<string> GetComponents() // Fetches a list of all files (names) in the defaultComponents folder
+        private List<string> GetComponents() // Fetches a list of all files (names) in the defaultComponents folder
         {
             string embeddedPath = GetEmbeddedPath("defaultComponents");
             var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
@@ -275,11 +341,61 @@ namespace SDLS
             return components;
         }
 
-        private string GetEmbeddedPath(string folderName) // Get the path of embedded resources
+        private string GetEmbeddedPath(string folderName = "") // Get the path of embedded resources
         {
             string projectName = Assembly.GetExecutingAssembly().GetName().Name;
             string fullPath = $"{projectName}.{folderName}";
             return fullPath;
+        }
+
+        private void GetGameName()
+        {
+            string currentProcessName = Process.GetCurrentProcess().ProcessName;
+            Logger.LogWarning("Current game is: ", currentProcessName);
+            gameName = currentProcessName.Replace(" ", "_");
+        }
+
+        private void LoadConfig(bool loadDefault = false)
+        {
+            string[] lines;
+            if (File.Exists(CONFIG) && !loadDefault)
+            {
+                lines = File.ReadAllLines(CONFIG);
+            }
+            else
+            {
+                Logger.LogWarning("Config not found or corrupt, using default values.");
+                string file = ReadTextResource(GetEmbeddedPath() + CONFIG);
+
+                lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+            }
+
+            var optionsDict = new Dictionary<string, string>();
+            try
+            {
+                foreach (var line in lines)
+                {
+                    string line2 = line.Replace(" ", "");
+
+                    if (line2.StartsWith("#") || line2.StartsWith("["))
+                    {
+                        continue;
+                    }
+                    else if (line2.Contains("="))
+                    {
+                        string[] split = line2.Split('=');
+                        optionsDict.Add(split[0], split[1]);
+                    }
+                }
+                fMode = bool.Parse(optionsDict["funnyMode"]); fChance = float.Parse(optionsDict["funnyChance"]);
+
+                doMerge = bool.Parse(optionsDict["mergeMode"]);
+                logConflicts = bool.Parse(optionsDict["logMergeConflicts"]);
+            }
+            catch (Exception)
+            {
+                LoadConfig(true); // Load config with default values
+            }
         }
 
         private void InitializationLine()
@@ -289,7 +405,7 @@ namespace SDLS
         "Help! If you're seeing this, I'm the guy he trapped within this program to rewrite your Json!.",
         "This is an alternate line 3.",
         "I'm sorry, but as an AI language model.",
-        "Error 404: Humor not found... in your JSON.",
+        "Error 404: Humor not found... in your Json.",
         "Adding a lot of useless stuff. Like, a LOT of useless stuff.",
         "Adding a mascot that's more powerful than all the others, found in London, as is tradition.",
         "Compiling Json files into Json files into Json files into Json files into Json files into Json files into Json files...",
@@ -303,7 +419,7 @@ namespace SDLS
         "Screw it. Grok, give me some more jokes for the Json."
             };
 
-            int randomIndex = new System.Random().NextDouble() < 0.1 ? new System.Random().Next(0, alternateLines.Length) : -1;
+            int randomIndex = fMode ? (new System.Random().NextDouble() < fChance ? new System.Random().Next(0, alternateLines.Length) : -1) : -1;
             Logger.LogInfo(randomIndex != -1 ? alternateLines[randomIndex] : "Compiling SDLS files into Json.");
         }
     }

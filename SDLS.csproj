@@ -27,11 +27,12 @@
     <!-- Include the default settings ini file as fallback -->
     <EmbeddedResource Include="SDLS_Config.ini" />
 
-    <!-- Include all JSON files in the default folder -->
-    <EmbeddedResource Include="default/*.json" />
+    <!-- Include all JSON files in all subdirectories of Sunless Sea -->
+    <EmbeddedResource Include="Sunless Sea/**/*.json" />
 
-    <!-- Include all files in the defaultComponents folder -->
-    <EmbeddedResource Include="defaultComponents/*.json" />
+    <!-- Include all JSON files in all subdirectories of Sunless Skies -->
+    <EmbeddedResource Include="Sunless Skies/**/*.json" />
+
 </ItemGroup>
 
 </Project>

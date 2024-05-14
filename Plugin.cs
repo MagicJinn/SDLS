@@ -1,12 +1,12 @@
-﻿using BepInEx;
+﻿#define SKIES // Variable that tracks whether the game is being compiled for Sea or Skies
+
+using BepInEx;
 using UnityEngine;
 using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Diagnostics;
 using System.Collections.Generic;
-using JsonFx.Json;
 using Sunless.Game.Utilities;
 using Sunless.Game.ApplicationProviders;
 
@@ -20,24 +20,23 @@ namespace SDLS
         // Config options
         private const string CONFIG = "SDLS_Config.ini";
         private bool fMode; private float fChance;
-
         private bool doMerge;
         private bool logConflicts;
 
-        private JsonReader jsonReader; private JsonWriter jsonWriter;
         private List<string> components; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
 
         private IDictionary<int, object> mergedMods = new Dictionary<int, object>();
 
         private void Awake()
         {
-            gameName = GetGameName();
+            gameName = Compatibility.GetGameName();
+            Logger.LogInfo("Managed game is " + gameName);
+
+            JSON.PrepareJsonManipulation();
 
             LoadConfig();
 
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-
-            jsonReader = new JsonReader(); jsonWriter = new JsonWriter();
 
             TrashAllJson();
         }
@@ -46,7 +45,7 @@ namespace SDLS
         {
             InitializationLine();
 
-            string[] filePaths = GetFilePaths(gameName)
+            string[] filePaths = Compatibility.GetFilePaths();
 
             components = GetComponents();
 
@@ -107,10 +106,10 @@ namespace SDLS
                 List<string> objectList = new List<string>();
                 foreach (String splitString in splitStrings)
                 {
-                    var deserializedJson = Deserialize(splitString);
+                    var deserializedJson = JSON.Deserialize(splitString);
                     // Deserialize the default mold data
                     string directory = components.Contains(name) ? "defaultComponents" : "default";
-                    var embeddedData = Deserialize(JsonAsText(name, directory));
+                    var embeddedData = JSON.Deserialize(JsonAsText(name, directory));
                     if (doMerge)
                     {
                         MergeMods(deserializedJson, mergedMods);
@@ -121,7 +120,7 @@ namespace SDLS
                     var returnData = ApplyFieldsToMold(deserializedJson, embeddedData);
 
                     // Serialize the updated mold data back to JSON string
-                    objectList.Add(Serialize(returnData));
+                    objectList.Add(JSON.Serialize(returnData));
                 }
 
                 if (doMerge)
@@ -181,7 +180,7 @@ namespace SDLS
 
         private object HandleObject(object fieldValue, string fieldName)
         {
-            var newMoldItem = Deserialize(JsonAsText(fieldName, "defaultComponents"));
+            var newMoldItem = JSON.Deserialize(JsonAsText(fieldName, "defaultComponents"));
             return fieldValue is IDictionary<string, object> fieldValueDict
                 ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
                 : fieldValue;
@@ -248,16 +247,6 @@ namespace SDLS
             objects.Add(jsonText.Substring(startIndex));
 
             return objects.ToArray();
-        }
-
-        private string Serialize(object data)
-        {
-            return new JsonWriter().Write(data);
-        }
-
-        private Dictionary<string, object> Deserialize(string jsonText)
-        {
-            return jsonReader.Read<Dictionary<string, object>>(jsonText);
         }
 
         private string GetLastWord(string str)
@@ -333,44 +322,6 @@ namespace SDLS
             return fullPath;
         }
 
-        private string[] GetFilePaths(string gameName)
-        {
-            if (gameName == "Sunless_Sea")
-            {
-                return { // All possible files able to be modded (with .json removed)
-                    "entities/qualities",
-                    "entities/areas",
-                    "entities/events",
-                    "entities/exchanges",
-                    "entities/personas",
-                    "geography/TileRules",
-                    "geography/Tiles",
-                    "geography/TileSets",
-                    "encyclopaedia/CombatAttacks",
-                    "encyclopaedia/CombatItems",
-                    "encyclopaedia/SpawnedEntities",
-                    "encyclopaedia/Associations",
-                    "encyclopaedia/Tutorials",
-                    "encyclopaedia/Flavours"
-            };
-            }
-            else if (gameName == "Sunless_Skies")
-            {
-                return { // You're the expert here, you gotta figure out how this is gonna look
-                    "qualities",
-                    "areas",
-                    "events",
-                    "exchanges"
-                }
-            }
-        }
-        private void GetGameName()
-        {
-            string currentProcessName = Process.GetCurrentProcess().ProcessName;
-            Logger.LogWarning("Current game is: ", currentProcessName);
-            return currentProcessName.Replace(" ", "_");
-        }
-
         private void LoadConfig(bool loadDefault = false)
         {
             string[] lines;
@@ -430,7 +381,7 @@ namespace SDLS
         "Jason? JASON!",
         "Adding exponentially more data.",
         "Json is honestly just a Trojan Horse to smuggle Javascript into other languages.",
-        "In Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\n   Down to a sunless sea.",
+        "\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea.",
         "She Simplifying my Data Loading till I Sunless",
         "Screw it. Grok, give me some more jokes for the Json."
             };

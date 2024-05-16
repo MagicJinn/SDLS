@@ -8,39 +8,39 @@ using System.Collections.Generic;
 
 namespace SDLS
 {
-    public static class JSON
-    {
+        public static class JSON
+        {
 #if !SKIES // Sea build
-        private static JsonReader jsonReader;
-        private static JsonWriter jsonWriter;
+                private static JsonReader JSONReader;
+                private static JsonWriter JSONWriter;
 #endif //     Has no Skies equivelant
 
-        public static void PrepareJsonManipulation()
-        {
+                public static void PrepareJSONManipulation()
+                {
 #if !SKIES // Sea build
-            jsonReader = new JsonReader();
-            jsonWriter = new JsonWriter();
+                        JSONReader = new JsonReader();
+                        JSONWriter = new JsonWriter();
 #endif //     Has no Skies equivelant
-        }
+                }
 
-        public static string Serialize(object data)
-        {
-            string serializedData;
+                public static string Serialize(object data)
+                {
+                        string serializedData;
 #if !SKIES // Sea build
-            serializedData = jsonWriter.Write(data);
+                        serializedData = JSONWriter.Write(data);
 #else //      Skies build
-            serializedData = JsonConvert.SerializeObject(data);
+            serializedData = JSONConvert.SerializeObject(data);
 #endif
-            return serializedData;
-        }
+                        return serializedData;
+                }
 
-        public static Dictionary<string, object> Deserialize(string jsonText)
-        {
+                public static Dictionary<string, object> Deserialize(string JSONText)
+                {
 #if !SKIES // Sea build
-            return jsonReader.Read<Dictionary<string, object>>(jsonText);
+                        return JSONReader.Read<Dictionary<string, object>>(JSONText);
 #else //      Skies build
-            return JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonText);
+            return JSONConvert.DeserializeObject<Dictionary<string, object>>(JSONText);
 #endif
+                }
         }
-    }
 }

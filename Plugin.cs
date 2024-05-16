@@ -24,14 +24,15 @@ namespace SDLS
 
         private List<string> components; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
 
-
-        //private List<string> mergedMods = new List<object>();
+        // Dictionary of lists of IDictionaries.
         private Dictionary<string, List<IDictionary<string, object>>> mergedMods = new Dictionary<string, List<IDictionary<string, object>>>();
+        // Dictionary: string = filename, object is list.
+        // List: list of IDictionaries (a list of JSON objects).
+        // IDictionary = The actual JSON objects. string = key, object = value / nested objects.
 
         private void Awake()
         {
             gameName = Compatibility.GetGameName();
-            Log("Managed game is " + gameName);
 
             JSON.PrepareJSONManipulation();
 
@@ -46,41 +47,31 @@ namespace SDLS
         {
             InitializationLine();
 
-            string[] filePaths = Compatibility.GetFilePaths();
+            string[] filePaths = Compatibility.GetFilePaths(); // List of all possible moddable files
 
-            components = GetComponents();
+            components = GetComponents(); // list of each default component
 
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
             foreach (string subDir in FileHelper.GetAllSubDirectories())
             {
-                // Concatenate each file path with the directory path and read the file
                 foreach (string filePath in filePaths)
                 {
                     string pathTo = Path.Combine("addon", subDir);
                     string fullPath = Path.Combine(pathTo, filePath);
 
-                    // Attempt to read the file with ".sdls" extension
-                    string sdlsFile = FileHelper.ReadTextFile(fullPath + ".sdls");
-                    // Attempt to read the file with ".SDLS.json" extension
-                    string prefixFile = FileHelper.ReadTextFile(fullPath + "SDLS.json");
+                    string sdlsFile = FileHelper.ReadTextFile(fullPath + ".sdls"); // Attempt to read the file with ".sdls" extension
+                    string prefixFile = FileHelper.ReadTextFile(fullPath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension
+                    string fileContent = sdlsFile != null ? sdlsFile : prefixFile; // Pick the available option, favouring .sdls files
 
-                    // Choose the content based on availability of files
-                    string fileContent = sdlsFile != null ? sdlsFile : prefixFile;
-
-                    // Log a warning if both file types are found, choosing the one with ".sdls" extension
-                    if (sdlsFile != null && prefixFile != null)
-                    {
-                        Warn("Detected both a .sdlf and a SDLF.json file. The .sdlf file will be used.");
-                        Warn("Please consider removing one of these files to avoid confusion.");
-                    }
+                    if (sdlsFile?.prefixFile != null) // Log a warning if both file types are found, choosing the one with ".sdls" extension
+                        Warn("Detected both a .sdlf and a SDLF.json file. The .sdlf file will be used.\nPlease consider removing one of these files to avoid confusion.");
 
                     if (fileContent != null)
                     {
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
                         string fileName = GetLastWord(fullPath);
-
 
                         // if (doMerge)
                         // {
@@ -93,7 +84,6 @@ namespace SDLS
                         // }
                         // else
                         // {
-                        string targetPath = Application.persistentDataPath + "/";
                         string pathToDelete = Path.Combine(Application.persistentDataPath, Path.Combine("addon", "SDLS_MERGED"));
                         RemoveDirectory(pathToDelete);
 

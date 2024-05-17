@@ -1,10 +1,9 @@
-﻿#define SKIES // Variable that tracks whether the game is being compiled for Sea or Skies
-
-using BepInEx;
+﻿using BepInEx;
 using UnityEngine;
 using System;
 using System.IO;
 using System.Linq;
+using System.Diagnostics;
 using System.Reflection;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
@@ -15,14 +14,16 @@ namespace SDLS
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        private string gameName;
+        //private string gameName;
 
         // Config options
         private const string CONFIG = "SDLS_Config.ini";
         private bool doMerge;
         private bool logConflicts;
 
-        private List<string> components; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
+        private List<string> componentNames; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
+        private Dictionary<string, Dictionary<string, object>> componentCache = new Dictionary<string, Dictionary<string, object>>();
+        private bool TilesSpecialCase = false;
 
         // Dictionary of lists of IDictionaries.
         private Dictionary<string, List<IDictionary<string, object>>> mergedMods = new Dictionary<string, List<IDictionary<string, object>>>();
@@ -30,9 +31,11 @@ namespace SDLS
         // List: list of IDictionaries (a list of JSON objects).
         // IDictionary = The actual JSON objects. string = key, object = value / nested objects.
 
+        private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>();
+
         private void Awake()
         {
-            gameName = Compatibility.GetGameName();
+            //gameName = Compatibility.GetGameName();
 
             JSON.PrepareJSONManipulation();
 
@@ -40,16 +43,28 @@ namespace SDLS
 
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
+            InitializationLine();
+
+            DebugTimer("TrashAllJson");
             TrashAllJSON();
+            DebugTimer("TrashAllJson");
+        }
+
+
+        void OnApplicationQuit()
+        {
+            while (true)
+            {
+                Log("AAAAAAAAAAAAAAAAAAAAAAA");
+            }
         }
 
         private void TrashAllJSON()
         {
-            InitializationLine();
 
-            string[] filePaths = Compatibility.GetFilePaths(); // List of all possible moddable files
+            string[] filePaths = JSON.GetFilePaths(); // List of all possible moddable files
 
-            components = GetComponents(); // list of each default component
+            componentNames = FindComponents(); // list of each default component
 
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
@@ -65,13 +80,15 @@ namespace SDLS
                     string prefixFile = FileHelper.ReadTextFile(fullPath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension
                     string fileContent = sdlsFile != null ? sdlsFile : prefixFile; // Pick the available option, favouring .sdls files
 
-                    if (sdlsFile?.prefixFile != null) // Log a warning if both file types are found, choosing the one with ".sdls" extension
+                    if (sdlsFile != null && prefixFile != null) // Log a warning if both file types are found, choosing the one with ".sdls" extension
                         Warn("Detected both a .sdlf and a SDLF.json file. The .sdlf file will be used.\nPlease consider removing one of these files to avoid confusion.");
 
                     if (fileContent != null)
                     {
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
                         string fileName = GetLastWord(fullPath);
+
+                        DebugTimer("Trash " + fileName);
 
                         // if (doMerge)
                         // {
@@ -89,7 +106,13 @@ namespace SDLS
 
 
                         string trashedJSON = TrashJSON(fileContent, fileName);
+
+                        DebugTimer("Trash " + fileName);
+
+                        DebugTimer("Create " + fileName);
                         CreateJSON(trashedJSON, Path.Combine(pathTo, filePath));
+                        DebugTimer("Create " + fileName);
+
                         // }
                     }
                 }
@@ -124,7 +147,7 @@ namespace SDLS
 
                 foreach (string splitString in SplitJSON(providedJSON))
                 {
-                    var embeddedData = GetADefault(name); // Deserialize the default mold data
+                    var embeddedData = GetAComponent(name); // Deserialize the default mold data
                     var deserializedJSON = JSON.Deserialize(splitString);
 
                     // Apply each field found in the deserialized JSON to the mold data recursively
@@ -132,6 +155,8 @@ namespace SDLS
 
                     // Serialize the updated mold data back to JSON string
                     objectList.Add(JSON.Serialize(returnData));
+
+                    if (TilesSpecialCase) TilesSpecialCase = false;  // Stupid special case for Tiles, check GetComponent for details
                 }
 
                 string result = JoinJSON(objectList);
@@ -156,18 +181,18 @@ namespace SDLS
             {
                 var basin = kvp.Key; // Name of key, Eg UseEvent
                 var crucible = kvp.Value; // Value of key, Eg 500500
-                // var mergeCrucible = null
-                // if (mergeData != null)
-                // {
-                //     if (mergeData.ContainsKey(basin))
-                //     {
-                //         mergeCrucible = mergeData[basin];
-                //         Logger.LogWarning(mergeCrucible);
-                //     }
-                // }
+                                          // var mergeCrucible = null
+                                          // if (mergeData != null)
+                                          // {
+                                          //     if (mergeData.ContainsKey(basin))
+                                          //     {
+                                          //         mergeCrucible = mergeData[basin];
+                                          //         Logger.LogWarning(mergeCrucible);
+                                          //     }
+                                          // }
 
                 // Check if the field exists in the components list
-                if (components.Contains(basin))
+                if (componentNames.Contains(basin))
                 {
                     if (crucible is IEnumerable<object> array)
                     {
@@ -200,7 +225,7 @@ namespace SDLS
 
         private object HandleObject(object fieldValue, string fieldName)
         {
-            var newMoldItem = GetADefault(fieldName);
+            var newMoldItem = GetAComponent(fieldName);
             return fieldValue is IDictionary<string, object> fieldValueDict
                 ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
                 : fieldValue;
@@ -218,7 +243,7 @@ namespace SDLS
 
         private void MergeMods(string inputData, string name) // Running this will add inputData to the mergedMods registry
         {
-            var embeddedData = GetADefault(name);
+            var embeddedData = GetAComponent(name);
 
             // Creates entries for mod in a dictionary that can be referenced later.
             // Names like entities/events, which will be used later to create JSON files in the correct locations.
@@ -389,39 +414,59 @@ namespace SDLS
             }
         }
 
-        private List<string> GetComponents() // Fetches a list of all files (names) in the defaultComponents folder
+        private List<string> FindComponents() // Fetches a list of all files (names) in the defaultComponents folder
         {
-            string embeddedPath = GetEmbeddedPath("defaultComponents");
+            string embeddedPath = GetEmbeddedPath("default");
             var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
 
-            var components = new List<string>();
+            var names = new List<string>();
             foreach (var name in resourceNames)
             {
                 if (name.StartsWith(embeddedPath))
                 {
                     var component = name.Substring(embeddedPath.Length);
                     component = component.TrimStart('.').Replace(".json", "");
-                    components.Add(component);
-                    DWarn("component loaded: " + component);
+                    names.Add(component);
                 }
             }
-            if (components.Count == 0)
-            {
-                Error("Something went seriously wrong and SDLS was unable to load any default components!");
-            }
-            return components;
+            if (names.Count == 0) Error("Something went seriously wrong and SDLS was unable to load any default components!");
+            else DLog("Components found:\n" + string.Join(", ", names.ToArray())); // Log all components
+
+            return names;
         }
 
-        private Dictionary<string, object> GetADefault(string name)
+        private Dictionary<string, object> GetAComponent(string name)
         {
-            string directory = components.Contains(name) ? "defaultComponents" : "default";
-            return JSON.Deserialize(JSONAsText(name, directory));
+            if (!componentCache.ContainsKey(name))
+            {
+                componentCache[name] = JSON.Deserialize(JSONAsText(name, "default"));
+            }
+            else
+            {
+                // So the deal is, Tiles.json contains a field called Tiles, spelled exactly the same.
+                // So if we request the component, there is no way to know which one it requests.
+                // We get around this by checking whether we are currently handling the Tiles.json object,
+                // And if we are, return TilesTiles instead, since TilesTiles is only used inside of Tiles.json
+                // We set TilesSpecialCase to false after we handle the Tiles object.
+
+                if (name == "Tiles" && TilesSpecialCase) // If Tiles is requested, but TilesSpecialCase is true, it means it has been requested before in this instance, meaning it should 
+                {
+                    name = "TilesTiles"; // Set the name to TilesTiles to return the correct component
+                    if (!componentCache.ContainsKey("TilesTiles")) // If the TilesTiles component hasn't been added, add it.
+                    {
+                        componentCache[name] = JSON.Deserialize(JSONAsText(name, "default"));
+                    }
+                }
+            }
+
+            if (name == "Tiles") TilesSpecialCase = true; // Set special case to true after the first time Tiles has been requested and returned
+            return componentCache[name];
         }
 
         private string GetEmbeddedPath(string folderName = "") // Get the path of embedded resources
         {
             string projectName = Assembly.GetExecutingAssembly().GetName().Name;
-            string fullPath = $"{projectName}.{gameName}.{folderName}";
+            string fullPath = $"{projectName}.{folderName}";
             return fullPath;
         }
 
@@ -467,44 +512,68 @@ namespace SDLS
             }
         }
 
+        private void DebugTimer(string name)
+        {
+            if (!DebugTimers.ContainsKey(name))
+            {
+                DLog("Starting process " + name);
+                DebugTimers[name] = new Stopwatch();
+                DebugTimers[name].Start();
+            }
+            else
+            {
+                if (DebugTimers[name].IsRunning)
+                {
+                    DebugTimers[name].Stop();
+                    DLog($"Finished {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
+                }
+                else
+                { // Removes the timer and starts it again
+                    DebugTimers.Remove(name);
+                    DebugTimer(name);
+                }
+            }
+        }
+
         private void InitializationLine()
         {
             string[] lines = {
-        "Querrying ChatGPT for better JSON.",
-        "Help! If you're seeing this, I'm the guy he trapped within this program to rewrite your JSON!.",
-        "This is an alternate line 3.",
-        "I'm sorry, but as an AI language model.",
-        "Error 404: Humor not found... in your JSON.",
-        "Adding a lot of useless stuff. Like, a LOT of useless stuff.",
-        "Adding a mascot that's more powerful than all the others, found in London, as is tradition.",
-        "Compiling JSON files into JSON files into JSON files into JSON files into JSON files into JSON files into JSON files...",
-        "You better be using .sdls files.",
-        "Adding gluten to your JSON.",
-        "Jason? JASON!",
-        "Adding exponentially more data.",
-        "JSON is honestly just a Trojan Horse to smuggle Javascript into other languages.",
-        "\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea.",
-        "She Simplifying my Data Loading till I Sunless",
-        "Screw it. Grok, give me some more jokes for the JSON."
+            "Querrying ChatGPT for better JSON.",
+            "Help! If you're seeing this, I'm the guy he trapped within this program to rewrite your JSON!.",
+            "This is an alternate line 3.",
+            "I'm sorry, but as an AI language model.",
+            "Error 404: Humor not found... in your JSON.",
+            "Adding a lot of useless stuff. Like, a LOT of useless stuff.",
+            "Adding a mascot that's more powerful than all the others, found in London, as is tradition.",
+            "Compiling JSON files into JSON files into JSON files into JSON files into JSON files into JSON files into JSON files...",
+            "You better be using .sdls files.",
+            "Adding gluten to your JSON.",
+            "Jason? JASON!",
+            "Adding exponentially more data.",
+            "JSON is honestly just a Trojan Horse to smuggle Javascript into other languages.",
+            "\n\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea.",
+            "She Simplifying my Data Loading till I Sunless",
+            "Screw it. Grok, give me some more jokes for the JSON.",
+            "\nCan you guess where the JSON goes?\nThat's right!\n It goes in the square hole!",
             };
 
-            Log(lines[new System.Random().Next(0, lines.Length)]);
+            Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
         }
 
         // Simplified log functions
-        private void Log(string message) { Logger.LogInfo(message); }
-        private void Warn(string message) { Logger.LogWarning(message); }
-        private void Error(string message) { Logger.LogError(message); }
+        private void Log(object message) { Logger.LogInfo(message); }
+        private void Warn(object message) { Logger.LogWarning(message); }
+        private void Error(object message) { Logger.LogError(message); }
 #if DEBUG
         // Log functions that don't run when built in Release mode
-        private void DLog(string message){Log(message);}
-        private void DWarn(string message){Warn(message);}
-        private void DError(string message){Error(message);}
+        private void DLog(object message){Log(message);}
+        private void DWarn(object message){Warn(message);}
+        private void DError(object message){Error(message);}
 #else
         // Empty overload methods to make sure the plugin doesn't crash when built in release mode
-        private void DLog(string message) { }
-        private void DWarn(string message) { }
-        private void DError(string message) { }
+        private void DLog(object message) { }
+        private void DWarn(object message) { }
+        private void DError(object message) { }
 #endif
     }
 }

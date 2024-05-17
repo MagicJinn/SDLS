@@ -21,6 +21,10 @@ namespace SDLS
         private bool doMerge;
         private bool logConflicts;
 
+        private bool doCleanup;
+
+        private List<string> createdFiles = new List<string>(); // Tracks every file SDLS creates. Used during cleanup
+
         private List<string> componentNames; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
         private Dictionary<string, Dictionary<string, object>> componentCache = new Dictionary<string, Dictionary<string, object>>();
         private bool TilesSpecialCase = false;
@@ -35,8 +39,6 @@ namespace SDLS
 
         private void Awake()
         {
-            //gameName = Compatibility.GetGameName();
-
             JSON.PrepareJSONManipulation();
 
             LoadConfig();
@@ -45,18 +47,23 @@ namespace SDLS
 
             InitializationLine();
 
-            DebugTimer("TrashAllJson");
+            DebugTimer("TrashAllJSON");
             TrashAllJSON();
-            DebugTimer("TrashAllJson");
+            DebugTimer("TrashAllJSON");
         }
 
 
         void OnApplicationQuit()
         {
-            // while (true)
-            // {
-            //     Log("AAAAAAAAAAAAAAAAAAAAAAA");
-            // }
+            // Removes all files created by SDLS before closing, because otherwise they would cause problems with Vortex
+            // So basically, if a user had SDLS installed, and used Vortex to manage their mods, if they wanted to remove
+            // a mod, Vortex would only remove the .sdls files, and not the .json files, which would cause the game to
+            // still run them, and the user would have no clue why. 
+            if (doCleanup)
+            {
+                RemoveDirectory("SDLS_MERGED");
+                foreach (string file in createdFiles) RemoveJSON(file);
+            }
         }
 
         private void TrashAllJSON()
@@ -101,8 +108,7 @@ namespace SDLS
                         // }
                         // else
                         // {
-                        string pathToDelete = Path.Combine(Application.persistentDataPath, Path.Combine("addon", "SDLS_MERGED"));
-                        RemoveDirectory(pathToDelete);
+                        RemoveDirectory("SDLS_MERGED");
 
 
                         string trashedJSON = TrashJSON(fileContent, fileName);
@@ -110,7 +116,7 @@ namespace SDLS
                         DebugTimer("Trash " + fileName);
 
                         DebugTimer("Create " + fileName);
-                        CreateJSON(trashedJSON, Path.Combine(pathTo, filePath));
+                        CreateJSON(trashedJSON, fullPath);
                         DebugTimer("Create " + fileName);
 
                         // }
@@ -346,6 +352,7 @@ namespace SDLS
 
                 File.WriteAllText(writePath, "[" + trashedJSON + "]");
                 Log("Created new file at " + path);
+                createdFiles.Add(path);
             }
             catch (Exception ex)
             {
@@ -353,24 +360,25 @@ namespace SDLS
             }
         }
 
-
         private void RemoveJSON(string filePath)
         {
             string targetPath = Application.persistentDataPath + "/";
             string JSONFilePath = targetPath + filePath + ".json";
             if (File.Exists(JSONFilePath))
             {
-                Warn("Removing " + filePath + " before merging mods.");
+                Warn("Removing " + filePath);
                 File.Delete(JSONFilePath); // Delete any files that exist, that might screw up SDLS merge loading
             }
         }
 
-        private void RemoveDirectory(string path)
+        private void RemoveDirectory(string path) // Removes any directory in Addon
         {
+            string pathToDelete = Path.Combine(Application.persistentDataPath, Path.Combine("addon", path));
+
             try
             {
-                Directory.Delete(path, true);
-                Warn("Removing " + path + " since mergeMode = false");
+                Directory.Delete(pathToDelete, true);
+                Warn("Removing " + pathToDelete);
             }
             catch (DirectoryNotFoundException) { }
             catch (Exception ex)
@@ -503,8 +511,9 @@ namespace SDLS
                     }
                 }
 
-                doMerge = bool.Parse(optionsDict["mergeMode"]);
+                doMerge = bool.Parse(optionsDict["doMerge"]);
                 logConflicts = bool.Parse(optionsDict["logMergeConflicts"]);
+                doCleanup = bool.Parse(optionsDict["doCleanup"]);
             }
             catch (Exception)
             {

@@ -53,10 +53,10 @@ namespace SDLS
 
         void OnApplicationQuit()
         {
-            while (true)
-            {
-                Log("AAAAAAAAAAAAAAAAAAAAAAA");
-            }
+            // while (true)
+            // {
+            //     Log("AAAAAAAAAAAAAAAAAAAAAAA");
+            // }
         }
 
         private void TrashAllJSON()

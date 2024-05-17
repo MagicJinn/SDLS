@@ -447,7 +447,21 @@ namespace SDLS
         {
             if (!componentCache.ContainsKey(name))
             {
-                componentCache[name] = JSON.Deserialize(JSONAsText(name, "default"));
+                string asText = JSONAsText(name, "default");
+
+                string referenceString = "REFERENCE=";
+                string hasReference = asText.Replace(" ", "");
+                if (hasReference.Contains(referenceString))
+                {
+                    DLog(hasReference);
+                    string referenceName = hasReference.Replace(referenceString, "");
+                    var value = GetAComponent(referenceName);
+                    componentCache[name] = value;
+                }
+                else
+                {
+                    componentCache[name] = JSON.Deserialize(asText);
+                }
             }
             else
             {

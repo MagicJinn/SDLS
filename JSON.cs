@@ -14,15 +14,15 @@ namespace SDLS
                         JSONWriter = new JsonWriter();
                 }
 
-                public static string Serialize(object data)
+                public static string Serialize(object obj)
                 {
-                        string serializedData = JSONWriter.Write(data);
+                        string serializedData = JSONWriter.Write(obj);
                         return serializedData;
                 }
 
-                public static Dictionary<string, object> Deserialize(string JSONText)
+                public static Dictionary<string, object> Deserialize(string strObj)
                 {
-                        Dictionary<string, object> deserializedData = JSONReader.Read<Dictionary<string, object>>(JSONText);
+                        Dictionary<string, object> deserializedData = JSONReader.Read<Dictionary<string, object>>(strObj);
                         return deserializedData;
                 }
 

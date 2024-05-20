@@ -3,8 +3,8 @@ using UnityEngine;
 using System;
 using System.IO;
 using System.Linq;
-using System.Diagnostics;
 using System.Reflection;
+using System.Diagnostics;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
 using Sunless.Game.ApplicationProviders;
@@ -14,26 +14,34 @@ namespace SDLS
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        //private string gameName;
-
         // Config options
         private const string CONFIG = "SDLS_Config.ini";
         private bool doMerge;
         private bool logConflicts;
 
+        private bool basegameMerge;
+
         private bool doCleanup;
+        // Config options end
 
         private List<string> createdFiles = new List<string>(); // Tracks every file SDLS creates. Used during cleanup
 
-        private List<string> componentNames; // Contains the names of all the "Components" files. Data that doesn't have it's own file, but are needed by qualities or events.
-        private Dictionary<string, Dictionary<string, object>> componentCache = new Dictionary<string, Dictionary<string, object>>();
-        private bool TilesSpecialCase = false;
+        private List<string> componentNames; // Contains the names of all the JSON defaults
+        private Dictionary<string, Dictionary<string, object>> componentCache = new Dictionary<string, Dictionary<string, object>>(); // Cache for loaded components
+        private bool TilesSpecialCase = false; // Variable for the special case of Tiles.json. Check GetAComponent for more info
 
+
+        private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
+        private List<string> conflictLog = new List<string>(); // List of conflicts
         // Dictionary of lists of IDictionaries.
-        private Dictionary<string, List<IDictionary<string, object>>> mergedMods = new Dictionary<string, List<IDictionary<string, object>>>();
+        private Dictionary<string, Dictionary<int, IDictionary<string, object>>> mergedMods = new Dictionary<string, Dictionary<int, IDictionary<string, object>>>();
         // Dictionary: string = filename, object is list.
         // List: list of IDictionaries (a list of JSON objects).
         // IDictionary = The actual JSON objects. string = key, object = value / nested objects.
+
+        // Loads all basegame json files if basegameMerge = true
+        // private Dictionary<string, Dictionary<string, object>> basegameCache = new Dictionary<string, Dictionary<string, object>>();
+        private Dictionary<string, Dictionary<string, IDictionary<string, object>>> basegameCache = new Dictionary<string, Dictionary<string, IDictionary<string, object>>>();
 
         private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>();
 
@@ -52,7 +60,6 @@ namespace SDLS
             DebugTimer("TrashAllJSON");
         }
 
-
         void OnApplicationQuit()
         {
             // Removes all files created by SDLS before closing, because otherwise they would cause problems with Vortex
@@ -61,14 +68,15 @@ namespace SDLS
             // still run them, and the user would have no clue why. 
             if (doCleanup)
             {
+                DebugTimer("Cleanup");
                 RemoveDirectory("SDLS_MERGED");
                 foreach (string file in createdFiles) RemoveJSON(file);
+                DebugTimer("Cleanup");
             }
         }
 
         private void TrashAllJSON()
         {
-
             string[] filePaths = JSON.GetFilePaths(); // List of all possible moddable files
 
             componentNames = FindComponents(); // list of each default component
@@ -76,15 +84,15 @@ namespace SDLS
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
-            foreach (string subDir in FileHelper.GetAllSubDirectories())
+            foreach (string modFolder in FileHelper.GetAllSubDirectories())
             {
                 foreach (string filePath in filePaths)
                 {
-                    string pathTo = Path.Combine("addon", subDir);
-                    string fullPath = Path.Combine(pathTo, filePath);
+                    string modFolderInAddon = Path.Combine("addon", modFolder);
+                    string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
 
-                    string sdlsFile = FileHelper.ReadTextFile(fullPath + ".sdls"); // Attempt to read the file with ".sdls" extension
-                    string prefixFile = FileHelper.ReadTextFile(fullPath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension
+                    string sdlsFile = FileHelper.ReadTextFile(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
+                    string prefixFile = FileHelper.ReadTextFile(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension
                     string fileContent = sdlsFile != null ? sdlsFile : prefixFile; // Pick the available option, favouring .sdls files
 
                     if (sdlsFile != null && prefixFile != null) // Log a warning if both file types are found, choosing the one with ".sdls" extension
@@ -92,66 +100,72 @@ namespace SDLS
 
                     if (fileContent != null)
                     {
+                        string fileName = GetLastWord(fullRelativePath);
+
+                        DebugTimer("Trash " + fullRelativePath);
+
                         fileContent = fileContent.Substring(1, fileContent.Length - 2); // Remove the [ ] around the string
-                        string fileName = GetLastWord(fullPath);
 
-                        DebugTimer("Trash " + fileName);
+                        currentModName = fullRelativePath;
 
-                        // if (doMerge)
-                        // {
-                        //     RemoveJSON(fullPath);
-                        //     MergeMods(fileContent, filePath);
-
-
-                        //     string trashedJSON = TrashJSON(fileContent, fileName);
-                        //     Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, pathTo));
-                        // }
-                        // else
-                        // {
-                        RemoveDirectory("SDLS_MERGED");
+                        if (doMerge)
+                        {
+                            DebugTimer("Merge " + fullRelativePath);
+                            RemoveJSON(fullRelativePath);
+                            MergeMods(fileContent, filePath);
 
 
-                        string trashedJSON = TrashJSON(fileContent, fileName);
+                            string trashedJSON = TrashJSON(fileContent, fileName);
+                            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, modFolderInAddon));
+                            DebugTimer("Merge " + fullRelativePath);
+                            DebugTimer("Trash " + fullRelativePath);
+                        }
+                        else
+                        {
+                            RemoveDirectory("SDLS_MERGED");
 
-                        DebugTimer("Trash " + fileName);
+                            string trashedJSON = TrashJSON(fileContent, fileName);
+                            DebugTimer("Trash " + fullRelativePath);
 
-                        DebugTimer("Create " + fileName);
-                        CreateJSON(trashedJSON, fullPath);
-                        DebugTimer("Create " + fileName);
+                            DebugTimer("Create " + fullRelativePath);
+                            CreateJSON(trashedJSON, fullRelativePath);
+                            DebugTimer("Create " + fullRelativePath);
 
-                        // }
+                        }
                     }
                 }
             }
-
-            foreach (var merged in mergedMods)
+            if (doMerge)
             {
-                string fileName = merged.Key;
-                var JSON = merged.Value;
-                List<string> objectList = new List<string>();
-                foreach /*Loop through all */ (var str in JSON)
-                { // to check
-                    if (str != null) // to remove them from the list by only including non-null values
-                    {
-                        // Randomly stopped working
-                        //objectList.Add(JSON.Serialize(str));
-                    }
-                }
-
-                string trashedJSON = TrashJSON(JoinJSON(objectList), fileName); // Join all JSON together and Trash it like you would any other JSON
-                string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
                 Warn("DO NOT DISTRIBUTE MERGED JSON. IT WILL CONTAIN ALL MODS YOU HAVE INSTALLED, WHICH BELONG TO THEIR RESPECTIVE MOD AUTHORS.");
-                CreateJSON(trashedJSON, Path.Combine(pathTo, merged.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
+                foreach (var merged in mergedMods)
+                {
+                    string fileName = merged.Key;
+                    var objectsDict = merged.Value;
+                    List<string> objectList = new List<string>();
+
+                    foreach (var objDict in objectsDict.Values)
+                    {
+                        objectList.Add(JSON.Serialize(objDict));
+                    }
+
+                    string trashedJSON = TrashJSON(JoinJSON(objectList), fileName); // Join all JSON together and Trash it like you would any other JSON
+                    string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
+                    DLog(pathTo);
+                    DLog(merged.Key);
+                    CreateJSON(trashedJSON, Path.Combine(pathTo, merged.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
+                }
+                LogConflictsToFile();
             }
         }
 
-        private string TrashJSON(string providedJSON, string name)
+        private string TrashJSON(string strObjJoined, string name)
         {
             try
             {
-                List<string> objectList = new List<string>(); // List to catch all the JSON
+                List<string> strObjList = new List<string>(); // List to catch all the JSON
 
-                foreach (string splitString in SplitJSON(providedJSON))
+                foreach (string splitString in SplitJSON(strObjJoined))
                 {
                     var embeddedData = GetAComponent(name); // Deserialize the default mold data
                     var deserializedJSON = JSON.Deserialize(splitString);
@@ -160,42 +174,32 @@ namespace SDLS
                     var returnData = ApplyFieldsToMold(deserializedJSON, embeddedData);
 
                     // Serialize the updated mold data back to JSON string
-                    objectList.Add(JSON.Serialize(returnData));
+                    strObjList.Add(JSON.Serialize(returnData));
 
-                    if (TilesSpecialCase) TilesSpecialCase = false;  // Stupid special case for Tiles, check GetComponent for details
+                    if (TilesSpecialCase) TilesSpecialCase = false;  // Stupid special case for Tiles, check GetAComponent for details
                 }
 
-                string result = JoinJSON(objectList);
+                string result = JoinJSON(strObjList);
                 return result;
             }
             catch (Exception ex)
             {
                 Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
-                return providedJSON; // Return providedJSON as fallback
+                return strObjJoined; // Return providedJSON as fallback
             }
         }
 
         private IDictionary<string, object> ApplyFieldsToMold(
-            IDictionary<string, object> JSONData,
-            IDictionary<string, object> moldData,
-            IDictionary<string, object> mergeData = null
+            IDictionary<string, object> jsonObj,
+            IDictionary<string, object> moldData
             )
         {
             var mold = new Dictionary<string, object>(moldData);
 
-            foreach (var kvp in JSONData)
+            foreach (var kvp in jsonObj)
             {
                 var basin = kvp.Key; // Name of key, Eg UseEvent
                 var crucible = kvp.Value; // Value of key, Eg 500500
-                                          // var mergeCrucible = null
-                                          // if (mergeData != null)
-                                          // {
-                                          //     if (mergeData.ContainsKey(basin))
-                                          //     {
-                                          //         mergeCrucible = mergeData[basin];
-                                          //         Logger.LogWarning(mergeCrucible);
-                                          //     }
-                                          // }
 
                 // Check if the field exists in the components list
                 if (componentNames.Contains(basin))
@@ -220,12 +224,9 @@ namespace SDLS
         private object HandleArray(IEnumerable<object> array, string fieldName)
         {
             var newArray = new List<object>();
-            foreach (var item in array)
-            {
-                newArray.Add(item is IDictionary<string, object> itemDict
+            foreach (var item in array) newArray.Add(item is IDictionary<string, object> itemDict
                     ? HandleObject(itemDict, fieldName)
                     : item);
-            }
             return newArray;
         }
 
@@ -246,37 +247,148 @@ namespace SDLS
                     : fieldValue;
         }
 
+        // private Dictionary<string, IDictionary<string, object>> GetBasegameData(string name)
+        // {
+        //     if (!basegameCache.ContainsKey(name))
+        //     {
+        //         DLog("1");
+        //         basegameCache[name] = new Dictionary<string, IDictionary<string, object>>(); // Initialize the inner dictionary
+        //         DLog("2");
+        //         string asText = FileHelper.ReadTextFile(name + ".json");
+        //         asText = asText.Substring(1, asText.Length - 2); // Remove the [ ] around the string
+        //         string[] splitText = SplitJSON(asText);
+        //         DLog("3");
+        //         foreach (var str in splitText)
+        //         {
+        //             var deserializedJSON = JSON.Deserialize(str);
+        //             DLog("4");
+        //             int Id = (int)deserializedJSON["Id"];
+        //             DLog("5");
+        //             basegameCache[name][Convert.ToString(Id)] = deserializedJSON;
+        //             DLog("6");
+        //         }
+        //     }
+        //     DLog("7");
+        //     return basegameCache[name];
+        // }
 
-        private void MergeMods(string inputData, string name) // Running this will add inputData to the mergedMods registry
+        private void MergeMods(string strObjJoined, string relativePathDirectory) // Running this will add inputData to the mergedMods registry
         {
-            var embeddedData = GetAComponent(name);
+            string fileName = GetLastWord(relativePathDirectory);
+
+            var embeddedData = GetAComponent(fileName);
+
+            // var basegameData = GetBasegameData(name);
 
             // Creates entries for mod in a dictionary that can be referenced later.
             // Names like entities/events, which will be used later to create JSON files in the correct locations.
-            if (!mergedMods.ContainsKey(name))
+            if (!mergedMods.ContainsKey(relativePathDirectory))
             {
-                mergedMods[name] = new List<IDictionary<string, object>>(); // A list of dictionaries, with each dictionary being a JSON object
+                mergedMods[relativePathDirectory] = new Dictionary<int, IDictionary<string, object>>(); // A list of dictionaries, with each dictionary being a JSON object
             }
 
-            foreach (string splitString in SplitJSON(inputData)) // Adds each JSON object to the Mergemods name category
+            foreach (string strObjSplit in SplitJSON(strObjJoined)) // Adds each JSON object to the Mergemods name category
             {
-                var deserializedJSON = JSON.Deserialize(splitString);
+                var deserializedJSON = JSON.Deserialize(strObjSplit);
 
                 int Id = (int)deserializedJSON["Id"];
-                while (mergedMods[name].Count <= Id) mergedMods[name].Add(null); // Makes sure the list expands to acommodate all Id entries
 
-                mergedMods[name][Id] ??= deserializedJSON; // Add the inputObject to the registry if there is no entry there
-                if (mergedMods[name][Id] != null) // Begin the merging process if an object is already present.
+                if (mergedMods[relativePathDirectory].ContainsKey(Id)) // Begin the merging process if an object is already present.
                 {
-                    mergedMods[name][Id] = ApplyFieldsToMold(mergedMods[name][Id], embeddedData, deserializedJSON);
-                }
-            }
+                    IDictionary<string, object> tracedTree = mergedMods[relativePathDirectory][Id];
+                    IDictionary<string, object> mergeTree = deserializedJSON;
+                    IDictionary<string, object> compareData = embeddedData;
 
+                    mergedMods[relativePathDirectory][Id] = MergeTrees(tracedTree, mergeTree, compareData);
+
+                }
+                else mergedMods[relativePathDirectory][Id] = deserializedJSON; // Add the inputObject to the registry if there is no entry there
+            }
             // Nothing happens at the end of this function, as this function only runs inside of a foreach loop
             // and once it concludes other code begins to run, which will create and save the JSON.
         }
 
-        private string[] SplitJSON(string JSONText) // Splits JSON objects from eachother, so they can be processed individually
+        private IDictionary<string, object> MergeTrees(IDictionary<string, object> tracedTree, IDictionary<string, object> mergeTree, IDictionary<string, object> compareData)
+        {
+            foreach (var key in mergeTree.Keys)
+            {
+                if (tracedTree.ContainsKey(key))
+                {
+                    if (tracedTree[key] is IDictionary<string, object> tracedSubTree && mergeTree[key] is IDictionary<string, object> mergeSubTree)
+                    {
+                        // Both are dictionaries, so we merge them recursively.
+                        var nextCompareData = GetNextCompareData(compareData, key);
+                        tracedTree[key] = MergeTrees(tracedSubTree, mergeSubTree, nextCompareData);
+                    }
+                    else if (tracedTree[key] is IEnumerable<object> tracedList && mergeTree[key] is IEnumerable<object> mergeList)
+                    {
+                        tracedTree[key] = MergeLists(tracedList, mergeList);
+                    }
+                    else
+                    {
+                        // Overwrite value only if they are different and not the default value.
+                        bool valuesAreDifferent = !tracedTree[key].Equals(mergeTree[key]);
+                        bool overwritingValueIsNotDefault = compareData != null && compareData[key] != null && compareData.ContainsKey(key) && !compareData[key].Equals(mergeTree[key]);
+                        if (valuesAreDifferent && overwritingValueIsNotDefault)
+                        {
+                            LogValueOverwritten(key, (int)tracedTree["Id"], tracedTree[key], mergeTree[key]);
+                            tracedTree[key] = mergeTree[key];
+                        }
+                    }
+                }
+                else
+                {
+                    // Key does not exist in tracedTree, just add it.
+                    tracedTree[key] = mergeTree[key];
+                }
+            }
+            return tracedTree;
+        }
+
+        private IEnumerable<object> MergeLists(IEnumerable<object> tracedList, IEnumerable<object> mergeList)
+        {
+            var mergedList = tracedList.ToList();
+
+            foreach (var mergeItem in mergeList)
+            {
+                if (mergeItem is IDictionary<string, object> mergeDict && mergeDict.ContainsKey("Id"))
+                {
+                    int mergeId = (int)mergeDict["Id"];
+                    var existingItem = mergedList
+                        .OfType<IDictionary<string, object>>()
+                        .FirstOrDefault(item => item.ContainsKey("Id") && (int)item["Id"] == mergeId);
+
+                    if (existingItem != null)
+                    {
+                        // Merge objects with the same Id.
+                        var mergedItem = MergeTrees(existingItem, mergeDict, null);
+                        var index = mergedList.IndexOf(existingItem);
+                        mergedList[index] = mergedItem;
+                    }
+                    else
+                    {
+                        // Add new item.
+                        mergedList.Add(mergeDict);
+                    }
+                }
+                else
+                {
+                    // Add new item if no Id.
+                    mergedList.Add(mergeItem);
+                }
+            }
+
+            return mergedList;
+        }
+
+        private IDictionary<string, object> GetNextCompareData(IDictionary<string, object> compareData, string key)
+        {
+            bool compareDataValid = compareData != null && compareData.ContainsKey(key) && componentNames.Contains(key);
+            if (compareDataValid) return GetAComponent(key);
+            return compareData;
+        }
+
+        private string[] SplitJSON(string strObjJoined) // Splits JSON objects from eachother, so they can be processed individually
         {
             var objects = new List<string>();
 
@@ -284,9 +396,9 @@ namespace SDLS
             int startIndex = 0;
             bool isInObject = false; // Flag to track if inside a JSON object
 
-            for (int i = 0; i < JSONText.Length; i++)
+            for (int i = 0; i < strObjJoined.Length; i++)
             {
-                char currentChar = JSONText[i];
+                char currentChar = strObjJoined[i];
 
                 if (currentChar == '{')
                 {
@@ -304,81 +416,73 @@ namespace SDLS
                 else if (currentChar == ',' && depth == 0 && !isInObject)
                 {
                     // Ignore commas that are within nested objects
-                    objects.Add(JSONText.Substring(startIndex, i - startIndex));
+                    objects.Add(strObjJoined.Substring(startIndex, i - startIndex));
                     startIndex = i + 1;
                 }
             }
 
             // Add the last JSON object
-            objects.Add(JSONText.Substring(startIndex));
+            objects.Add(strObjJoined.Substring(startIndex));
 
             return objects.ToArray();
         }
 
-        private string JoinJSON(List<string> list) // Rejoins all JSON objects
+        private string JoinJSON(List<string> strList) // Rejoins all JSON objects
         {
-            return string.Join(",", list.ToArray());
+            return string.Join(",", strList.ToArray());
         }
 
         private string GetLastWord(string str)
         {
-            string result = str.Split(new char[] { '/', '\\' }).Last(/* Returns only the resource name */);
+            string result = str.Split(new char[] { '/', '\\' }).Last(/*Returns only the resource name*/);
             return result;
         }
 
-        string GetParentPath(string fullPath)
+        string GetParentPath(string filePath)
         {
-            // Find the last index of directory separator
-            int lastIndex = fullPath.LastIndexOfAny(new char[] { '/', '\\' });
-
-            if (lastIndex == -1) return ""; // If no directory separator is found, return an empty string
+            int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
+            if (lastIndex == -1) return "";
 
             // Return the substring from the start of the string up to the last directory separator
-            return fullPath.Substring(0, lastIndex + 1);
+            return filePath.Substring(0, lastIndex + 1);
         }
 
-        private void CreateJSON(string trashedJSON, string path) // Creates JSON out of plaintext, and puts them in the addon folder next to the original
+        private void CreateJSON(string strObjJoined, string relativeWritePath) // Creates JSON out of plaintext, and puts them in the addon folder next to the original
         {
-            string writePath = Path.Combine(Application.persistentDataPath, path) + ".json";
-            string actualPath = GetParentPath(writePath);
+            string writePath = Path.Combine(Application.persistentDataPath, relativeWritePath) + ".json";
+            string path = GetParentPath(writePath);
 
             try
             {
-                // Create the directory if it doesn't exist
-                if (!Directory.Exists(actualPath))
-                {
-                    Directory.CreateDirectory(actualPath);
-                }
+                if (!Directory.Exists(path)) Directory.CreateDirectory(path); // Create the directory if it doesn't exist
 
-                File.WriteAllText(writePath, "[" + trashedJSON + "]");
-                Log("Created new file at " + path);
-                createdFiles.Add(path);
+                File.WriteAllText(writePath, $"[{strObjJoined}]");
+                Log("Created new file at " + relativeWritePath);
+                createdFiles.Add(relativeWritePath);
             }
-            catch (Exception ex)
+            catch (Exception ex) { Error("Error writing file: " + ex.Message); }
+        }
+
+        private void RemoveJSON(string relativeFilePath)
+        {
+            string path = Application.persistentDataPath + "/";
+            string filePath = path + relativeFilePath + ".json";
+            if (File.Exists(filePath))
             {
-                Error("Error writing file: " + ex.Message);
+                Warn("Removing " + relativeFilePath);
+                File.Delete(filePath);
             }
         }
 
-        private void RemoveJSON(string filePath)
+        private void RemoveDirectory(string relativePath) // Removes any directory in Addon
         {
-            string targetPath = Application.persistentDataPath + "/";
-            string JSONFilePath = targetPath + filePath + ".json";
-            if (File.Exists(JSONFilePath))
-            {
-                Warn("Removing " + filePath);
-                File.Delete(JSONFilePath); // Delete any files that exist, that might screw up SDLS merge loading
-            }
-        }
-
-        private void RemoveDirectory(string path) // Removes any directory in Addon
-        {
-            string pathToDelete = Path.Combine(Application.persistentDataPath, Path.Combine("addon", path));
+            string relativePathDirectory = Path.Combine("addon", relativePath);
+            string path = Path.Combine(Application.persistentDataPath, relativePathDirectory);
 
             try
             {
-                Directory.Delete(pathToDelete, true);
-                Warn("Removing " + pathToDelete);
+                Directory.Delete(path, true);
+                Warn("Removing " + relativePathDirectory);
             }
             catch (DirectoryNotFoundException) { }
             catch (Exception ex)
@@ -387,12 +491,12 @@ namespace SDLS
             }
         }
 
-        private string JSONAsText(string resourceName, string folderName) // Method for loading embedded JSON resources
+        private string JSONAsText(string resourceName) // Method for loading embedded JSON resources
         {
             try
             {
                 string name = GetLastWord(resourceName);
-                string fullPath = GetEmbeddedPath(folderName);
+                string fullPath = GetEmbeddedPath("default");
                 string fullResourceName = $"{fullPath}.{name}.json"; // Construct the full resource name
                 return ReadTextResource(fullResourceName);
             }
@@ -404,14 +508,14 @@ namespace SDLS
             }
         }
 
-        private string ReadTextResource(string resource)
+        private string ReadTextResource(string fullResourceName)
         {
             Assembly assembly = Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream(resource))
+            using (Stream stream = assembly.GetManifestResourceStream(fullResourceName))
             {
                 if (stream == null)
                 {
-                    Warn("Tried to get resource that doesn't exist: " + resource);
+                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -445,22 +549,22 @@ namespace SDLS
 
         private Dictionary<string, object> GetAComponent(string name)
         {
-            if (!componentCache.ContainsKey(name))
+            string componentName = name;
+            if (!componentCache.ContainsKey(componentName))
             {
-                string asText = JSONAsText(name, "default");
+                string asText = JSONAsText(componentName);
 
                 string referenceString = "REFERENCE=";
-                string hasReference = asText.Replace(" ", "");
-                if (hasReference.Contains(referenceString))
+                string strippedAsText = asText.Replace(" ", "");
+                if (strippedAsText.Contains(referenceString))
                 {
-                    DLog(hasReference);
-                    string referenceName = hasReference.Replace(referenceString, "");
-                    var value = GetAComponent(referenceName);
-                    componentCache[name] = value;
+                    componentName = strippedAsText.Replace(referenceString, "");
+                    var value = GetAComponent(componentName);
+                    componentCache[componentName] = value;
                 }
                 else
                 {
-                    componentCache[name] = JSON.Deserialize(asText);
+                    componentCache[componentName] = JSON.Deserialize(asText);
                 }
             }
             else
@@ -471,18 +575,18 @@ namespace SDLS
                 // And if we are, return TilesTiles instead, since TilesTiles is only used inside of Tiles.json
                 // We set TilesSpecialCase to false after we handle the Tiles object.
 
-                if (name == "Tiles" && TilesSpecialCase) // If Tiles is requested, but TilesSpecialCase is true, it means it has been requested before in this instance, meaning it should 
+                if (componentName == "Tiles" && TilesSpecialCase) // If Tiles is requested, but TilesSpecialCase is true, it means it has been requested before in this instance, meaning it should 
                 {
-                    name = "TilesTiles"; // Set the name to TilesTiles to return the correct component
+                    componentName = "TilesTiles"; // Set the name to TilesTiles to return the correct component
                     if (!componentCache.ContainsKey("TilesTiles")) // If the TilesTiles component hasn't been added, add it.
                     {
-                        componentCache[name] = JSON.Deserialize(JSONAsText(name, "default"));
+                        componentCache[componentName] = JSON.Deserialize(JSONAsText(componentName));
                     }
                 }
             }
 
-            if (name == "Tiles") TilesSpecialCase = true; // Set special case to true after the first time Tiles has been requested and returned
-            return componentCache[name];
+            if (componentName == "Tiles") TilesSpecialCase = true; // Set special case to true after the first time Tiles has been requested and returned
+            return componentCache[componentName];
         }
 
         private string GetEmbeddedPath(string folderName = "") // Get the path of embedded resources
@@ -527,11 +631,14 @@ namespace SDLS
 
                 doMerge = bool.Parse(optionsDict["doMerge"]);
                 logConflicts = bool.Parse(optionsDict["logMergeConflicts"]);
+
+                basegameMerge = bool.Parse(optionsDict["basegameMerge"]);
+
                 doCleanup = bool.Parse(optionsDict["doCleanup"]);
             }
             catch (Exception)
             {
-                LoadConfig(true); // Load config with default values
+                LoadConfig( /*loadDefault =*/true); // Load config with default values
             }
         }
 
@@ -548,12 +655,39 @@ namespace SDLS
                 if (DebugTimers[name].IsRunning)
                 {
                     DebugTimers[name].Stop();
-                    DLog($"Finished {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
+                    DLog($"Finished process {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
                 }
                 else
                 { // Removes the timer and starts it again
                     DebugTimers.Remove(name);
                     DebugTimer(name);
+                }
+            }
+        }
+
+        private void LogValueOverwritten(string key, int Id, object oldValue, object newValue)
+        {
+            if (logConflicts)
+            {
+                string modToBlame = $"{currentModName} overwrote a value:";
+                Warn(modToBlame);
+                conflictLog.Add(modToBlame);
+
+                string overwrittenValues = $"Key '{key}' overwritten in Id '{Id}'. Old value: {oldValue}, New value: {newValue}";
+                Warn(overwrittenValues);
+                conflictLog.Add(overwrittenValues);
+            }
+        }
+
+        private void LogConflictsToFile()
+        {
+            if (conflictLog.Count > 0)
+            {
+                string fileName = "SDLS_Merge_Conflicts.log";
+                string writePath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+                using (StreamWriter writer = new StreamWriter(writePath, false))
+                {
+                    foreach (string str in conflictLog) writer.WriteLine(str);
                 }
             }
         }
@@ -577,7 +711,7 @@ namespace SDLS
             "\n\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea.",
             "She Simplifying my Data Loading till I Sunless",
             "Screw it. Grok, give me some more jokes for the JSON.",
-            "\nCan you guess where the JSON goes?\nThat's right!\n It goes in the square hole!",
+            "\nCan you guess where the JSON goes?\nThat's right!\nIt goes in the square hole!",
             };
 
             Log(lines[new System.Random().Next(0, lines.Length)] + "\n");

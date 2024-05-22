@@ -42,7 +42,9 @@ namespace SDLS
                                     "encyclopaedia/SpawnedEntities",
                                     "encyclopaedia/Associations",
                                     "encyclopaedia/Tutorials",
-                                    "encyclopaedia/Flavours"
+                                    "encyclopaedia/Flavours",
+                                    "constants/combatconstants",
+                                    "constants/navigationconstants"
         };
                 }
         }

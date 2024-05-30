@@ -1,0 +1,16 @@
+{
+    "World": null,
+    "OwnerName": null,
+    "Name": null,
+    "Personae": [],
+    "StartingArea": null,
+    "StartingDomicile": null,
+    "ItemsUsableHere": false,
+    "Exchange": null,
+    "TurnLengthSeconds": 0,
+    "MaxActionsAllowed": 0,
+    "MaxCardsAllowed": 0,
+    "ActionsInPeriodBeforeExhaustion": 0,
+    "Description": null,
+    "Id": null
+}

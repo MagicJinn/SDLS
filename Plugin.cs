@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
 using Sunless.Game.ApplicationProviders;
+using System.Xml.XPath;
 
 namespace SDLS
 {
@@ -34,10 +35,10 @@ namespace SDLS
         private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
         private List<string> conflictLog = new List<string>(); // List of conflicts
         // Dictionary of lists of IDictionaries.
-        private Dictionary<string, Dictionary<int, IDictionary<string, object>>> mergedModsDict = new Dictionary<string, Dictionary<int, IDictionary<string, object>>>();
+        private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new Dictionary<string, Dictionary<int, Dictionary<string, object>>>();
         // Dictionary: string = filename, object is list.
         // List: list of IDictionaries (a list of JSON objects).
-        // IDictionary = The actual JSON objects. string = key, object = value / nested objects.
+        // Dictionary = The actual JSON objects. string = key, object = value / nested objects.
 
         private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>();
 
@@ -115,8 +116,8 @@ namespace SDLS
                             MergeMods(fileContent, filePath);
 
 
-                            string trashedJSON = TrashJSON(fileContent, fileName);
                             Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, modFolderInAddon));
+                            string trashedJSON = TrashJSON(fileContent, fileName);
                             DebugTimer("Merge " + fullRelativePath);
                             DebugTimer("Trash " + fullRelativePath);
                         }
@@ -153,9 +154,7 @@ namespace SDLS
                     string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
                     CreateJSON(trashedJSON, Path.Combine(pathTo, fileDictEntry.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
                 }
-                DebugTimer("LogConflictsToFile");
-                LogConflictsToFile();
-                DebugTimer("LogConflictsToFile");
+                DebugTimer("LogConflictsToFile"); LogConflictsToFile(); DebugTimer("LogConflictsToFile");
             }
         }
 
@@ -163,7 +162,7 @@ namespace SDLS
         {
             try
             {
-                List<string> strObjList = new List<string>(); // List to catch all the JSON
+                List<string> strObjList = new List<string>(); // List to store all the JSON strings
 
                 foreach (string splitString in JSON.SplitJSON(strObjJoined))
                 {
@@ -179,6 +178,7 @@ namespace SDLS
                     if (TilesSpecialCase) TilesSpecialCase = false;  // Stupid special case for Tiles, check GetAComponent for details
                 }
 
+                // Join the processed JSON strings together
                 string result = JSON.JoinJSON(strObjList);
                 return result;
             }
@@ -189,15 +189,18 @@ namespace SDLS
             }
         }
 
-        private IDictionary<string, object> ApplyFieldsToMold(
-            IDictionary<string, object> tracedJSONObj, // This data will get copied over
-            IDictionary<string, object> mergeJSONObj, // Data will get merged INTO this object
-            IDictionary<string, object> compareData = null // Data will get compared to this object
+        private Dictionary<string, object> ApplyFieldsToMold(
+            Dictionary<string, object> tracedJSONObj, // This data will get copied over
+            Dictionary<string, object> mergeJSONObj, // Data will get merged INTO this object
+            Dictionary<string, object> compareData = null // Data will get compared to this object
         )
         {
-            IDictionary<string, object> mergeJSONObjCopy = new Dictionary<string, object>(mergeJSONObj);
+            // Copy the input dictionary to a new dictionary as a preventitive measure to not repeat the events of 16/05/2023
+            Dictionary<string, object> mergeJSONObjCopy = new Dictionary<string, object>(mergeJSONObj);
 
-            // Ensure compareData is not null, initialize it with mergeJSONObj if necessary
+            // Ensure compareData is not null
+            // When copying over values during regular trashing, this saves performance, since values are not copied over unnecessarily
+            // When mod merging, it ensures no actual values are overwritten by default values during merging
             compareData ??= new Dictionary<string, object>(mergeJSONObj);
 
             foreach (var kvp in tracedJSONObj)
@@ -205,42 +208,18 @@ namespace SDLS
                 var tracedKey = kvp.Key; // Name of key, e.g., UseEvent
                 var tracedValue = kvp.Value; // Value of key, e.g., 500500
 
-                // Rule 1: If mergeJSONObjCopy doesn't have the key, copy the traced value directly
-                if (!mergeJSONObjCopy.ContainsKey(tracedKey))
+                if (tracedValue /* content of the current field */ is /* another JSON object */ Dictionary<string, object> tracedDict /*&&
+                mergeJSONObjCopy[tracedKey] is Dictionary<string, object> mergeDict*/)
                 {
-                    mergeJSONObjCopy[tracedKey] = tracedValue;
-                    continue;
-                }
-
-                // Rule 2: If overwriting data is equal to compare data and the key exists, skip overwrite
-                if (compareData.TryGetValue(tracedKey, out var compareValue) && Equals(tracedValue, compareValue))
-                {
-                    DLog($"Overwriting data was default, skipping. {tracedKey} {tracedValue} {compareValue}");
-                    continue;
-                }
-
-                // Rule 3: If overwriting value is different from merge tree value and merge tree value is different from compare data
-                if (mergeJSONObjCopy.TryGetValue(tracedKey, out var mergeValue) && !Equals(tracedValue, mergeValue) && !Equals(mergeValue, compareValue))
-                {
-                    var nameOrId = NameOrId(mergeJSONObj);
-                    if (mergeJSONObjCopy.TryGetValue("Id", out var idObj) && idObj is int id)
-                    {
-                        LogValueOverwritten(tracedKey, id, mergeValue, tracedValue);
-                    }
-                }
-
-                // Handle the merge for nested dictionaries according to the rules
-                if (tracedValue is IDictionary<string, object> tracedDict && mergeJSONObjCopy[tracedKey] is IDictionary<string, object> mergeDict)
-                {
-                    var passedInComparedData = GetAComponent(tracedKey);
-                    mergeJSONObjCopy[tracedKey] = ApplyFieldsToMold(tracedDict, mergeDict, passedInComparedData);
+                    var passedInComparedData = GetAComponent(tracedKey); // 
+                    mergeJSONObjCopy[tracedKey] = ApplyFieldsToMold(tracedDict, mergeJSONObjCopy/*mergeDict*/, passedInComparedData);
                 }
                 else
                 {
-                    // Overwrite the value (Rule 4 and Rule 5)
-                    mergeJSONObjCopy[tracedKey] = componentNames.Contains(tracedKey)
-                        ? HandleComponent(tracedValue, tracedKey)
-                        : HandleDefault(tracedValue);
+                    mergeJSONObjCopy[tracedKey] = /* If */ componentNames.Contains(/* the currently handled */ tracedKey)
+                    // Is there a default component for this field?
+                        ? HandleComponent(tracedValue, tracedKey) // Yes
+                        : HandleDefault(tracedValue); // No
                 }
             }
 
@@ -251,48 +230,104 @@ namespace SDLS
         {
             return tracedValue switch
             {
-                IEnumerable<object> array => HandleArray(array, tracedKey),
-                _ => HandleObject(tracedValue, tracedKey)
+                IEnumerable<object> array =>
+                HandleArray(array.Cast<Dictionary<string, object>>().ToList(), tracedKey),
+                _ =>
+                HandleObject(tracedValue, tracedKey)
             };
         }
 
-        private object HandleArray(IEnumerable<object> array, string fieldName)
+        private object HandleArray(List<Dictionary<string, object>> array, string fieldName, List<Dictionary<string, object>> arrayToMergeInto = null)
         {
-            var newArray = new List<object>();
+            if (arrayToMergeInto == null) arrayToMergeInto = new List<Dictionary<string, object>>(); // Set the arrayToMergeInto to an empty array (list) if none are provided.
+
             foreach (var item in array)
             {
-                if (item is IDictionary<string, object> itemDict)
+                if (item is Dictionary<string, object> itemDict) // If the item is a dictionary (eg, storylet, quality etc)
                 {
-                    var itemId = NameOrId(itemDict, fieldName);
-                    var match = newArray.OfType<IDictionary<string, object>>().FirstOrDefault(x => NameOrId(x, fieldName) == itemId);
-                    if (match != null)
+                    // Some objects use different primary keys. For example, QualityAffected uses it's AssociatedQualityId as a primary key.
+                    string keyToCheckFor = FindPrimaryKey(itemDict);
+
+                    MergeOrAddToArray(
+                        itemDict, arrayToMergeInto, keyToCheckFor,
+                        out int mergeIntoIndex // The index of the object in the mergeInto array
+                    );
+
+                    if (mergeIntoIndex != -1) // Handles the event where 2 json objects should be merged
                     {
-                        ApplyFieldsToMold(itemDict, match);
+                        var currentData = arrayToMergeInto[mergeIntoIndex];
+                        arrayToMergeInto[mergeIntoIndex] = ApplyFieldsToMold(itemDict, currentData);
                     }
                     else
                     {
-                        newArray.Add(HandleObject(itemDict, fieldName));
+                        object objectItem = HandleObject(itemDict, fieldName);
+
+                        // "convert" the object HandleObject returns into a dictionary, since the function itself cannot be altered
+                        // AE Arrays will never contain another array
+                        // But if I don't fix it the compiler won't stop complaining
+                        if (objectItem is Dictionary<string, object> dictionaryItem)
+                            arrayToMergeInto.Add(dictionaryItem);
+                        else throw new InvalidCastException("Guhh? The returned object is not a Dictionary<string, object>.");
+
                     }
                 }
-                else
-                {
-                    newArray.Add(item);
-                }
+
+                else arrayToMergeInto.Add(item); // Else, if the item is a value (for example, "weather", results in ["value"])
+
             }
-            return newArray;
+            return arrayToMergeInto;
         }
 
+        private void MergeOrAddToArray(
+    Dictionary<string, object> item,
+    List<Dictionary<string, object>> arrayToMergeInto,
+    string keyToCheckFor,
+    out int mergeIntoIndex
+)
+        {
+            mergeIntoIndex = -1;
+            Console.WriteLine($"Checking for key: {keyToCheckFor}");
+
+            if (item.ContainsKey(keyToCheckFor))
+            {
+                Console.WriteLine($"Item contains key: {keyToCheckFor}. Value: {item[keyToCheckFor]}");
+
+                for (int i = 0; i < arrayToMergeInto.Count; i++)
+                {
+                    if (arrayToMergeInto[i].ContainsKey(keyToCheckFor))
+                    {
+
+                        if (Equals(arrayToMergeInto[i][keyToCheckFor], item[keyToCheckFor]))
+                        {
+                            mergeIntoIndex = i;
+                            Console.WriteLine($"Match found at index: {mergeIntoIndex}");
+                            break;
+                        }
+                        // else
+                        // {
+                        //     Console.WriteLine("Values do not match");
+                        // }
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Item does not contain key: {keyToCheckFor}");
+            }
+
+            Console.WriteLine($"Final mergeIntoIndex: {mergeIntoIndex}");
+        }
         private object HandleObject(object fieldValue, string fieldName)
         {
             var newMoldItem = GetAComponent(fieldName);
-            return fieldValue is IDictionary<string, object> fieldValueDict
+            return fieldValue is Dictionary<string, object> fieldValueDict
                 ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
                 : fieldValue;
         }
 
         private object HandleDefault(object fieldValue)
         {
-            return fieldValue is IDictionary<string, object> nestedJSON
+            return fieldValue is Dictionary<string, object> nestedJSON
                 ? ApplyFieldsToMold(nestedJSON, new Dictionary<string, object>())
                 : fieldValue is IEnumerable<object> array
                     ? array.Select(HandleDefault).ToList()
@@ -315,7 +350,7 @@ namespace SDLS
             // Names like entities/events, which will be used later to create JSON files in the correct locations.
             if (!mergedModsDict.ContainsKey(relativeFilePath))
             {
-                mergedModsDict[relativeFilePath] = new Dictionary<int, IDictionary<string, object>>(); // A list of dictionaries, with each dictionary being a JSON object
+                mergedModsDict[relativeFilePath] = new Dictionary<int, Dictionary<string, object>>(); // A list of dictionaries, with each dictionary being a JSON object
             }
 
 
@@ -327,14 +362,14 @@ namespace SDLS
                 if (relativeFilePath.StartsWith("constants")) Id = 0; // Constants must always overwrite eachother, there are no different objects in constants
                 else
                 {
-                    Id = NameOrId(deserializedJSON, relativeFilePath); // Name is converted to an integer during processing (REMEMBER THIS)
+                    Id = NameOrId(deserializedJSON); // Name is converted to an integer during processing (REMEMBER THIS)
                 }
 
                 if (mergedModsDict[relativeFilePath].ContainsKey(Id)) // Begin the merging process if an object is already present.
                 {
-                    IDictionary<string, object> tracedTree = deserializedJSON;
-                    IDictionary<string, object> mergeTree = mergedModsDict[relativeFilePath][Id];
-                    IDictionary<string, object> compareData = embeddedData;
+                    Dictionary<string, object> tracedTree = deserializedJSON;
+                    Dictionary<string, object> mergeTree = mergedModsDict[relativeFilePath][Id];
+                    Dictionary<string, object> compareData = embeddedData;
 
                     mergedModsDict[relativeFilePath][Id] = ApplyFieldsToMold(tracedTree, mergeTree, compareData);
                 }
@@ -344,26 +379,45 @@ namespace SDLS
             // and once it concludes other code begins to run, which will create and save the JSON.
         }
 
-        private int NameOrId(IDictionary<string, object> JSONObj, string relativeFilePath)
+        private int NameOrId(Dictionary<string, object> JSONObj)
         {
+            string[] keys = { "AssociatedQualityId", "Id", "Name" };
+            string primaryKey = FindPrimaryKey(JSONObj);
 
-            string[] componentsWithoutId = JSON.ComponentsWithoutId();
-            bool objectHasNameInsteadOfId = componentsWithoutId
-                                            .Select(GetLastWord)
-                                            .Contains(GetLastWord(relativeFilePath)); // Checks whether the object has an Id key in it or only a name
-            int Id = !objectHasNameInsteadOfId ?
-                    (int)JSONObj["Id"] :
-                    JSONObj["Name"].GetHashCode();
-            return Id;
+            if (keys.Contains(primaryKey))
+            {
+                return primaryKey == "Name" ?
+                JSONObj[primaryKey].GetHashCode() :
+                (int)JSONObj[primaryKey];
+            }
+
+            throw new ArgumentException($"The provided JSON object does not contain an 'Id', 'AssociatedQualityId' or 'Name' field. Object {JSON.Serialize(JSONObj)}");
         }
 
-        // private IDictionary<string, object> MergeTrees(IDictionary<string, object> tracedTree, IDictionary<string, object> mergeTree, IDictionary<string, object> compareData)
+        private string FindPrimaryKey(Dictionary<string, object> JSONObj)
+        {
+            string[] keys = { "AssociatedQualityId", "Id", "Name" };
+
+            foreach (string key in keys)
+            {
+                if (JSONObj.ContainsKey(key))
+                {
+                    return key;
+                }
+            }
+
+            throw new ArgumentException($"The provided JSON object does not contain an 'Id', 'AssociatedQualityId', or 'Name' field. Object: {JSON.Serialize(JSONObj)}");
+        }
+
+
+
+        // private Dictionary<string, object> MergeTrees(Dictionary<string, object> tracedTree, Dictionary<string, object> mergeTree, Dictionary<string, object> compareData)
         // {
         //     foreach (var key in mergeTree.Keys)
         //     {
         //         if (tracedTree.ContainsKey(key))
         //         {
-        //             if (tracedTree[key] is IDictionary<string, object> tracedSubTree && mergeTree[key] is IDictionary<string, object> mergeSubTree)
+        //             if (tracedTree[key] is Dictionary<string, object> tracedSubTree && mergeTree[key] is Dictionary<string, object> mergeSubTree)
         //             {
         //                 // Both are dictionaries, so we merge them recursively.
         //                 var nextCompareData = GetNextCompareData(compareData, key);
@@ -400,11 +454,11 @@ namespace SDLS
 
         //     foreach (var mergeItem in mergeList)
         //     {
-        //         if (mergeItem is IDictionary<string, object> mergeDict && mergeDict.ContainsKey("Id"))
+        //         if (mergeItem is Dictionary<string, object> mergeDict && mergeDict.ContainsKey("Id"))
         //         {
         //             int mergeId = (int)mergeDict["Id"];
         //             var existingItem = mergedList
-        //                 .OfType<IDictionary<string, object>>()
+        //                 .OfType<Dictionary<string, object>>()
         //                 .FirstOrDefault(item => item.ContainsKey("Id") && (int)item["Id"] == mergeId);
 
         //             if (existingItem != null)
@@ -430,7 +484,7 @@ namespace SDLS
         //     return mergedList;
         // }
 
-        // private IDictionary<string, object> GetNextCompareData(IDictionary<string, object> compareData, string key)
+        // private Dictionary<string, object> GetNextCompareData(Dictionary<string, object> compareData, string key)
         // {
         //     bool compareDataValid = compareData != null && compareData.ContainsKey(key) && componentNames.Contains(key);
         //     if (compareDataValid) return GetAComponent(key);
@@ -446,7 +500,7 @@ namespace SDLS
         string GetParentPath(string filePath)
         {
             int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
-            if (lastIndex == -1) return "";
+            // if (lastIndex == -1) return "";
 
             // Return the substring from the start of the string up to the last directory separator
             return filePath.Substring(0, lastIndex + 1);
@@ -462,7 +516,7 @@ namespace SDLS
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
 
-                File.WriteAllText(writePath, (relativeWritePath.ToLower().Contains("constants"))
+                File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
                 ? strObjJoined : // Output file as a single object
                 $"[{strObjJoined}]"); // Put file in an array
                 Log("Created new file at " + relativeWritePath);
@@ -686,7 +740,7 @@ namespace SDLS
                 Warn(modToBlame);
                 conflictLog.Add(modToBlame);
 
-                string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'. Old value: {oldValue}, New value: {newValue}";
+                string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'.\nOld value: {oldValue}\nNew value: {newValue}";
                 Warn(overwrittenValues);
                 conflictLog.Add(overwrittenValues);
             }

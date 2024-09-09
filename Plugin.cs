@@ -7,8 +7,6 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
-using Sunless.Game.ApplicationProviders;
-using System.Xml.XPath;
 
 namespace SDLS
 {
@@ -19,13 +17,13 @@ namespace SDLS
         private const string CONFIG = "SDLS_Config.ini";
         private bool doMerge;
         private bool logConflicts;
-
         private bool basegameMerge;
 
-        private bool doCleanup;
+        private bool doCleanup; // Whether the files created by SDLS should be cleared during shutdown
         // Config options end
 
         private List<string> createdFiles = new List<string>(); // Tracks every file SDLS creates. Used during cleanup
+
 
         private List<string> componentNames; // Contains the names of all the JSON defaults
         private Dictionary<string, Dictionary<string, object>> componentCache = new Dictionary<string, Dictionary<string, object>>(); // Cache for loaded components
@@ -34,22 +32,23 @@ namespace SDLS
 
         private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
         private List<string> conflictLog = new List<string>(); // List of conflicts
-        // Dictionary of lists of IDictionaries.
+        private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>(); // List of Debug timers, used by DebugTimer()
+
+
+        // Dictionary of lists of Dictionaries.
         private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new Dictionary<string, Dictionary<int, Dictionary<string, object>>>();
         // Dictionary: string = filename, object is list.
         // List: list of IDictionaries (a list of JSON objects).
         // Dictionary = The actual JSON objects. string = key, object = value / nested objects.
 
-        private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>();
 
-        private void Awake()
+        private void Awake( /* Run by Unity on game start */ )
         {
             JSON.PrepareJSONManipulation();
 
             LoadConfig();
 
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-
             InitializationLine();
 
             DebugTimer("TrashAllJSON");
@@ -57,7 +56,7 @@ namespace SDLS
             DebugTimer("TrashAllJSON");
         }
 
-        void OnApplicationQuit()
+        void OnApplicationQuit( /* Run by Unity on game exit */ )
         {
             if (doCleanup)
             {
@@ -192,33 +191,37 @@ namespace SDLS
         private Dictionary<string, object> ApplyFieldsToMold(
             Dictionary<string, object> tracedJSONObj, // This data will get copied over
             Dictionary<string, object> mergeJSONObj, // Data will get merged INTO this object
-            Dictionary<string, object> compareData = null // Data will get compared to this object
+            object baselineObject = null // Data will get compared to this object, except for Arrays, which will get merged
         )
         {
+            DLog("Ran ApplyFieldsToMold");
             // Copy the input dictionary to a new dictionary as a preventitive measure to not repeat the events of 16/05/2023
             Dictionary<string, object> mergeJSONObjCopy = new Dictionary<string, object>(mergeJSONObj);
 
-            // Ensure compareData is not null
+            // Ensure baselineObject is not null
             // When copying over values during regular trashing, this saves performance, since values are not copied over unnecessarily
             // When mod merging, it ensures no actual values are overwritten by default values during merging
-            compareData ??= new Dictionary<string, object>(mergeJSONObj);
+            baselineObject ??= new Dictionary<string, object>(mergeJSONObj);
 
             foreach (var kvp in tracedJSONObj)
             {
                 var tracedKey = kvp.Key; // Name of key, e.g., UseEvent
                 var tracedValue = kvp.Value; // Value of key, e.g., 500500
 
-                if (tracedValue /* content of the current field */ is /* another JSON object */ Dictionary<string, object> tracedDict /*&&
-                mergeJSONObjCopy[tracedKey] is Dictionary<string, object> mergeDict*/)
+                if (tracedValue /* content of the current field */ is /* a JSON object */ Dictionary<string, object> tracedDict &&
+                mergeJSONObjCopy[tracedKey] /* content of the mergeJSONObj */ is /* also a JSON object */ Dictionary<string, object> mergeDict)
+                // Second check makes sure there is a JSON object present to merge into,
+                // instead of something like `null`, which should be overwritten or filled with a component
                 {
-                    var passedInComparedData = GetAComponent(tracedKey); // 
-                    mergeJSONObjCopy[tracedKey] = ApplyFieldsToMold(tracedDict, mergeJSONObjCopy/*mergeDict*/, passedInComparedData);
+                    var passedInCompareData = GetAComponent(tracedKey); // get a component to use as baselineObject to prevent default value overwriting
+                    mergeJSONObjCopy[tracedKey] = ApplyFieldsToMold(tracedDict, mergeDict, passedInCompareData);
                 }
                 else
                 {
+                    var baselineObjectValue = (baselineObject as Dictionary<string, object>)[tracedKey]; // Pass this into handlecomponent and handledefault
                     mergeJSONObjCopy[tracedKey] = /* If */ componentNames.Contains(/* the currently handled */ tracedKey)
                     // Is there a default component for this field?
-                        ? HandleComponent(tracedValue, tracedKey) // Yes
+                        ? HandleComponent(tracedValue, tracedKey, baselineObjectValue) // Yes
                         : HandleDefault(tracedValue); // No
                 }
             }
@@ -226,18 +229,58 @@ namespace SDLS
             return mergeJSONObjCopy;
         }
 
-        private object HandleComponent(object tracedValue, string tracedKey)
+        private object HandleComponent(object tracedValue, string tracedKey, object baselineObject = null)
         {
-            return tracedValue switch
+            DLog("Ran HandleComponent");
+            if (tracedValue is IEnumerable<object> array)
             {
-                IEnumerable<object> array =>
-                HandleArray(array.Cast<Dictionary<string, object>>().ToList(), tracedKey),
-                _ =>
-                HandleObject(tracedValue, tracedKey)
-            };
+                var castedArray = array.Cast<Dictionary<string, object>>().ToList();
+
+                // Check if baselineObject is of the correct type, if not, pass null
+                var baselineList = baselineObject as List<Dictionary<string, object>>;
+                return HandleArray(castedArray, tracedKey, baselineList);
+            }
+            else
+            {
+                return HandleObject(tracedValue, tracedKey, baselineObject);
+            }
         }
 
-        private object HandleArray(List<Dictionary<string, object>> array, string fieldName, List<Dictionary<string, object>> arrayToMergeInto = null)
+        private object HandleObject(object fieldValue, string fieldName, object baselineObject = null)
+        {
+            DLog("Ran HandleObject");
+            var newMoldItem = GetAComponent(fieldName);
+
+            if (fieldValue is Dictionary<string, object> fieldValueDict)
+            {
+                return ApplyFieldsToMold(fieldValueDict, newMoldItem, baselineObject);
+            }
+            else return fieldValue;
+        }
+
+        private object HandleDefault(object fieldValue, object baselineObject = null)
+        {
+            DLog("Ran HandleDefault");
+            DWarn(fieldValue);
+            if (fieldValue is Dictionary<string, object> nestedJSON)
+            {
+                return ApplyFieldsToMold(nestedJSON, new Dictionary<string, object>(), baselineObject);
+            }
+            else if (fieldValue is IEnumerable<object> array)
+            {
+
+                return array.Select(item => HandleDefault(item)).ToList();
+            }
+            else
+            {
+                return fieldValue;
+            }
+        }
+
+        private object HandleArray(
+                List<Dictionary<string, object>> array, // Provided array
+                string fieldName, // Name of the current field (eg. Enhancements) used for GetAComponent
+                List<Dictionary<string, object>> arrayToMergeInto = null)
         {
             if (arrayToMergeInto == null) arrayToMergeInto = new List<Dictionary<string, object>>(); // Set the arrayToMergeInto to an empty array (list) if none are provided.
 
@@ -255,7 +298,7 @@ namespace SDLS
 
                     if (mergeIntoIndex != -1) // Handles the event where 2 json objects should be merged
                     {
-                        var currentData = arrayToMergeInto[mergeIntoIndex];
+                        var currentData = arrayToMergeInto[mergeIntoIndex]; // Data currently in the array's index
                         arrayToMergeInto[mergeIntoIndex] = ApplyFieldsToMold(itemDict, currentData);
                     }
                     else
@@ -267,23 +310,22 @@ namespace SDLS
                         // But if I don't fix it the compiler won't stop complaining
                         if (objectItem is Dictionary<string, object> dictionaryItem)
                             arrayToMergeInto.Add(dictionaryItem);
-                        else throw new InvalidCastException("Guhh? The returned object is not a Dictionary<string, object>.");
-
+                        else throw new InvalidCastException($"Guhh? The returned object is not a Dictionary<string, object>. {objectItem}");
                     }
                 }
-
-                else arrayToMergeInto.Add(item); // Else, if the item is a value (for example, "weather", results in ["value"])
+                // Else, if the item is a value (for example, "SubsurfaceWeather", results in ["value"])
+                else arrayToMergeInto.Add(item);
 
             }
             return arrayToMergeInto;
         }
 
         private void MergeOrAddToArray(
-    Dictionary<string, object> item,
-    List<Dictionary<string, object>> arrayToMergeInto,
-    string keyToCheckFor,
-    out int mergeIntoIndex
-)
+            Dictionary<string, object> item,
+            List<Dictionary<string, object>> arrayToMergeInto,
+            string keyToCheckFor,
+            out int mergeIntoIndex
+            )
         {
             mergeIntoIndex = -1;
             Console.WriteLine($"Checking for key: {keyToCheckFor}");
@@ -291,22 +333,21 @@ namespace SDLS
             if (item.ContainsKey(keyToCheckFor))
             {
                 Console.WriteLine($"Item contains key: {keyToCheckFor}. Value: {item[keyToCheckFor]}");
-
+                DLog("arrayToMergeInto.Count " + arrayToMergeInto.Count);
                 for (int i = 0; i < arrayToMergeInto.Count; i++)
                 {
+                    DLog(arrayToMergeInto);
+                    DLog("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
+                    DLog("arrayToMergeInto[i].ContainsKey(keyToCheckFor) " + arrayToMergeInto[i].ContainsKey(keyToCheckFor));
                     if (arrayToMergeInto[i].ContainsKey(keyToCheckFor))
                     {
-
+                        DLog("arrayToMergeInto[i][keyToCheckFor] " + arrayToMergeInto[i][keyToCheckFor] + " item[keyToCheckFor] " + item[keyToCheckFor]);
                         if (Equals(arrayToMergeInto[i][keyToCheckFor], item[keyToCheckFor]))
                         {
                             mergeIntoIndex = i;
                             Console.WriteLine($"Match found at index: {mergeIntoIndex}");
                             break;
                         }
-                        // else
-                        // {
-                        //     Console.WriteLine("Values do not match");
-                        // }
                     }
                 }
             }
@@ -316,22 +357,6 @@ namespace SDLS
             }
 
             Console.WriteLine($"Final mergeIntoIndex: {mergeIntoIndex}");
-        }
-        private object HandleObject(object fieldValue, string fieldName)
-        {
-            var newMoldItem = GetAComponent(fieldName);
-            return fieldValue is Dictionary<string, object> fieldValueDict
-                ? ApplyFieldsToMold(fieldValueDict, newMoldItem)
-                : fieldValue;
-        }
-
-        private object HandleDefault(object fieldValue)
-        {
-            return fieldValue is Dictionary<string, object> nestedJSON
-                ? ApplyFieldsToMold(nestedJSON, new Dictionary<string, object>())
-                : fieldValue is IEnumerable<object> array
-                    ? array.Select(HandleDefault).ToList()
-                    : fieldValue;
         }
 
         private void GetBasegameData(string relativeFilePath)
@@ -381,17 +406,11 @@ namespace SDLS
 
         private int NameOrId(Dictionary<string, object> JSONObj)
         {
-            string[] keys = { "AssociatedQualityId", "Id", "Name" };
             string primaryKey = FindPrimaryKey(JSONObj);
 
-            if (keys.Contains(primaryKey))
-            {
-                return primaryKey == "Name" ?
+            return primaryKey == "Name" ?
                 JSONObj[primaryKey].GetHashCode() :
                 (int)JSONObj[primaryKey];
-            }
-
-            throw new ArgumentException($"The provided JSON object does not contain an 'Id', 'AssociatedQualityId' or 'Name' field. Object {JSON.Serialize(JSONObj)}");
         }
 
         private string FindPrimaryKey(Dictionary<string, object> JSONObj)
@@ -402,6 +421,7 @@ namespace SDLS
             {
                 if (JSONObj.ContainsKey(key))
                 {
+                    DLog("Chose " + key + " as a primary key");
                     return key;
                 }
             }
@@ -409,87 +429,6 @@ namespace SDLS
             throw new ArgumentException($"The provided JSON object does not contain an 'Id', 'AssociatedQualityId', or 'Name' field. Object: {JSON.Serialize(JSONObj)}");
         }
 
-
-
-        // private Dictionary<string, object> MergeTrees(Dictionary<string, object> tracedTree, Dictionary<string, object> mergeTree, Dictionary<string, object> compareData)
-        // {
-        //     foreach (var key in mergeTree.Keys)
-        //     {
-        //         if (tracedTree.ContainsKey(key))
-        //         {
-        //             if (tracedTree[key] is Dictionary<string, object> tracedSubTree && mergeTree[key] is Dictionary<string, object> mergeSubTree)
-        //             {
-        //                 // Both are dictionaries, so we merge them recursively.
-        //                 var nextCompareData = GetNextCompareData(compareData, key);
-        //                 tracedTree[key] = MergeTrees(tracedSubTree, mergeSubTree, nextCompareData);
-        //             }
-        //             else if (tracedTree[key] is IEnumerable<object> tracedList && mergeTree[key] is IEnumerable<object> mergeList)
-        //             {
-        //                 tracedTree[key] = MergeLists(tracedList, mergeList);
-        //             }
-        //             else
-        //             {
-        //                 // Overwrite value only if they are different and not the default value.
-        //                 bool valuesAreDifferent = !tracedTree[key].Equals(mergeTree[key]);
-        //                 bool overwritingValueIsNotDefault = compareData != null && compareData[key] != null && compareData.ContainsKey(key) && !compareData[key].Equals(mergeTree[key]);
-        //                 if (valuesAreDifferent && overwritingValueIsNotDefault)
-        //                 {
-        //                     LogValueOverwritten(key, (int)tracedTree["Id"], tracedTree[key], mergeTree[key]);
-        //                     tracedTree[key] = mergeTree[key];
-        //                 }
-        //             }
-        //         }
-        //         else
-        //         {
-        //             // Key does not exist in tracedTree, just add it.
-        //             tracedTree[key] = mergeTree[key];
-        //         }
-        //     }
-        //     return tracedTree;
-        // }
-
-        // private IEnumerable<object> MergeLists(IEnumerable<object> tracedList, IEnumerable<object> mergeList)
-        // {
-        //     var mergedList = tracedList.ToList();
-
-        //     foreach (var mergeItem in mergeList)
-        //     {
-        //         if (mergeItem is Dictionary<string, object> mergeDict && mergeDict.ContainsKey("Id"))
-        //         {
-        //             int mergeId = (int)mergeDict["Id"];
-        //             var existingItem = mergedList
-        //                 .OfType<Dictionary<string, object>>()
-        //                 .FirstOrDefault(item => item.ContainsKey("Id") && (int)item["Id"] == mergeId);
-
-        //             if (existingItem != null)
-        //             {
-        //                 // Merge objects with the same Id.
-        //                 var mergedItem = MergeTrees(existingItem, mergeDict, null);
-        //                 var index = mergedList.IndexOf(existingItem);
-        //                 mergedList[index] = mergedItem;
-        //             }
-        //             else
-        //             {
-        //                 // Add new item.
-        //                 mergedList.Add(mergeDict);
-        //             }
-        //         }
-        //         else
-        //         {
-        //             // Add new item if no Id.
-        //             mergedList.Add(mergeItem);
-        //         }
-        //     }
-
-        //     return mergedList;
-        // }
-
-        // private Dictionary<string, object> GetNextCompareData(Dictionary<string, object> compareData, string key)
-        // {
-        //     bool compareDataValid = compareData != null && compareData.ContainsKey(key) && componentNames.Contains(key);
-        //     if (compareDataValid) return GetAComponent(key);
-        //     return compareData;
-        // }
 
         private string GetLastWord(string str)
         {
@@ -500,7 +439,6 @@ namespace SDLS
         string GetParentPath(string filePath)
         {
             int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
-            // if (lastIndex == -1) return "";
 
             // Return the substring from the start of the string up to the last directory separator
             return filePath.Substring(0, lastIndex + 1);
@@ -681,21 +619,16 @@ namespace SDLS
             {
                 foreach (var line in lines)
                 {
-                    string line2 = line.Replace(" ", "");
-
-                    if (line2.StartsWith("#") || line2.StartsWith("["))
+                    if (line.Contains('=')) // Check if the line contains an '=' character
                     {
-                        continue;
-                    }
-                    else if (line2.Contains("="))
-                    {
-                        string[] split = line2.Split('=');
-                        optionsDict.Add(split[0], split[1]);
+                        // Remove all spaces from the line and split it at the first occurrence of '=' into two parts
+                        string[] keyValue = line.Replace(" ", "").Split(new[] { '=' }, 2);
+                        optionsDict.Add(keyValue[0], keyValue[1]);
                     }
                 }
 
                 doMerge = bool.Parse(optionsDict["doMerge"]);
-                logConflicts = doMerge ?
+                logConflicts = doMerge ? // Respect log conflicts option if merging is enabled
                                     bool.Parse(optionsDict["logMergeConflicts"]) :
                                     false;
 
@@ -705,7 +638,7 @@ namespace SDLS
             }
             catch (Exception)
             {
-                LoadConfig( /*loadDefault =*/true); // Load config with default values
+                LoadConfig( /*loadDefault =*/ true); // Load config with default values
             }
         }
 
@@ -713,22 +646,20 @@ namespace SDLS
         {
             if (!DebugTimers.ContainsKey(name))
             {
+                // Start a new timer
                 DLog("Starting process " + name);
                 DebugTimers[name] = new Stopwatch();
                 DebugTimers[name].Start();
             }
+            else if (DebugTimers[name].IsRunning)
+            { // Stop the timer and log the result
+                DebugTimers[name].Stop();
+                DLog($"Finished process {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
+            }
             else
-            {
-                if (DebugTimers[name].IsRunning)
-                {
-                    DebugTimers[name].Stop();
-                    DLog($"Finished process {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
-                }
-                else
-                { // Removes the timer and starts it again
-                    DebugTimers.Remove(name);
-                    DebugTimer(name);
-                }
+            { // Removes the timer and starts it again
+                DebugTimers.Remove(name);
+                DebugTimer(name);
             }
         }
 
@@ -773,12 +704,14 @@ namespace SDLS
             "You better be using .sdls files.",
             "Adding gluten to your JSON.",
             "Jason? JASON!",
+            "Press X to JSON",
             "Adding exponentially more data.",
             "JSON is honestly just a Trojan Horse to smuggle Javascript into other languages.",
             "\n\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea.",
             "She Simplifying my Data Loading till I Sunless",
             "Screw it. Grok, give me some more jokes for the JSON.",
             "\nCan you guess where the JSON goes?\nThat's right!\nIt goes in the square hole!",
+            "You merely adopted the JSON. I was born in it, molded by it.",
             };
 
             Log(lines[new System.Random().Next(0, lines.Length)] + "\n");

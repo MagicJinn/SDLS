@@ -23,7 +23,7 @@ namespace SDLS
         private bool logDebugTimers;
         // Config options end
 
-        string persistentDataPath;
+        private readonly string persistentDataPath = Application.persistentDataPath;
 
         // Tracks every file SDLS creates. Used during cleanup
         private List<string> createdFiles = new();
@@ -32,13 +32,12 @@ namespace SDLS
         private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
         private bool TilesSpecialCase = false; // Variable for the special case of Tiles.json. Check GetAComponent for more info
 
-
         private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
-        private List<string> conflictLog = new List<string>(); // List of conflicts
-        private Dictionary<string, Stopwatch> DebugTimers = new Dictionary<string, Stopwatch>(); // List of Debug timers, used by DebugTimer()
+        private List<string> conflictLog = new(); // List of conflicts
+        private Dictionary<string, Stopwatch> DebugTimers = new(); // List of Debug timers, used by DebugTimer()
 
 
-        private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new Dictionary<string, Dictionary<int, Dictionary<string, object>>>();
+        private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new();
         // Dictionary structure breakdown:
         // - string: Represents the filename or category (eg events.json).
         // - Dictionary<int, Dictionary<string, object>>: 
@@ -55,10 +54,7 @@ namespace SDLS
 
         private void Initialization()
         {
-            JSON.PrepareJSONManipulation();
-
             LoadConfig();
-            persistentDataPath = Application.persistentDataPath;
 
             InitializationLine();
 
@@ -109,7 +105,6 @@ namespace SDLS
                 {
                     var resetEvent = new ManualResetEvent(false);
                     resetEvents.Add(resetEvent);
-
 
                     ThreadPool.QueueUserWorkItem(state =>
                     {
@@ -177,7 +172,7 @@ namespace SDLS
                 {
                     string fileName = fileDictEntry.Key;
                     var objectsDict = fileDictEntry.Value;
-                    List<string> JSONObjList = new List<string>();
+                    var JSONObjList = new List<string>();
 
                     foreach (var objDict in objectsDict)
                     {
@@ -196,7 +191,7 @@ namespace SDLS
         {
             try
             {
-                List<string> strObjList = new List<string>(); // List to store all the JSON strings
+                var strObjList = new List<string>(); // List to store all the JSON strings
                 var embeddedData = GetAComponent(name); // Deserialize the default mold data
 
                 foreach (string splitString in JSON.SplitJSON(strObjJoined))
@@ -229,11 +224,11 @@ namespace SDLS
         )
         {
             // Copy the input dictionary to a new dictionary as a preventitive measure to not repeat the events of 16/05/2023
-            Dictionary<string, object> mergeJSONObjCopy = new Dictionary<string, object>(mergeJSONObj);
+            var mergeJSONObjCopy = new Dictionary<string, object>(mergeJSONObj);
 
             foreach (var kvp in tracedJSONObj)
             {
-                var tracedKey = kvp.Key; // Name of key, e.g., UseEvent
+                string tracedKey = kvp.Key; // Name of key, e.g., UseEvent
                 var tracedValue = kvp.Value; // Value of key, e.g., 500500
 
                 mergeJSONObjCopy[tracedKey] = /* If */ componentNames.Contains(/* the currently handled */ tracedKey)
@@ -293,7 +288,7 @@ namespace SDLS
                 string fieldName, // Name of the current field (eg. Enhancements) used for GetAComponent
                 List<Dictionary<string, object>> arrayToMergeInto = null)
         {
-            if (arrayToMergeInto == null) arrayToMergeInto = new List<Dictionary<string, object>>(); // Set the arrayToMergeInto to an empty array (list) if none are provided.
+            arrayToMergeInto ??= new List<Dictionary<string, object>>(array.Count); // Set the arrayToMergeInto to an empty array (list) if none are provided.
 
             foreach (var item in array)
             {
@@ -429,7 +424,7 @@ namespace SDLS
             }
         }
 
-        private void RemoveDirectory(string relativePath) // Removes any directory in Addon
+        private void RemoveDirectory(string relativePath) // Removes any directory in addon
         {
             string relativePathDirectory = Path.Combine("addon", relativePath);
             string path = Path.Combine(persistentDataPath, relativePathDirectory);
@@ -474,32 +469,30 @@ namespace SDLS
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
-                using (StreamReader reader = new StreamReader(stream))
-                {
-                    return reader.ReadToEnd(); // Read and return the embedded resource
-                }
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd(); // Read and return the embedded resource
             }
         }
 
         private HashSet<string> FindComponents() // Fetches a list of all files (names) in the defaultComponents folder
         {
             string embeddedPath = GetEmbeddedPath("default");
-            var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
+            string[] resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
+            var components = new HashSet<string>();
 
-            var names = new HashSet<string>();
-            foreach (var name in resourceNames)
+            for (int i = 0; i < resourceNames.Length; i++)
             {
+                string name = resourceNames[i];
                 if (name.StartsWith(embeddedPath))
                 {
-                    var component = name.Substring(embeddedPath.Length);
-                    component = component.TrimStart('.').Replace(".json", "");
-                    names.Add(component);
+                    int startIndex = embeddedPath.Length + 1; // +1 to skip the dot
+                    int endIndex = name.Length - 5; // -5 to remove ".json"
+                    string componentName = name.Substring(startIndex, endIndex - startIndex);
+                    components.Add(componentName);
                 }
             }
-            if (names.Count == 0) Error("Something went seriously wrong and SDLS was unable to load any default components!");
-            else DLog("Components found:\n" + string.Join(", ", names.ToArray())); // Log all components
 
-            return names;
+            return components;
         }
 
         private Dictionary<string, object> GetAComponent(string name)
@@ -638,10 +631,8 @@ namespace SDLS
             {
                 string fileName = "SDLS_Merge_Conflicts.log";
                 string writePath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
-                using (StreamWriter writer = new StreamWriter(writePath, false))
-                {
-                    foreach (string str in conflictLog) writer.WriteLine(str);
-                }
+                using StreamWriter writer = new StreamWriter(writePath, false);
+                foreach (string str in conflictLog) writer.WriteLine(str);
             }
         }
 

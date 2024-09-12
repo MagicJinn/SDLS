@@ -13,11 +13,11 @@
     "Range": null,
     "Orientation": 0,
     "Arc": null,
-    "BaseHullDamage": null,
-    "BaseLifeDamage": null,
-    "ExposedQualityDamage": null,
-    "StaggerAmount": null,
-    "BaseWarmUp": null,
+    "BaseHullDamage": 0,
+    "BaseLifeDamage": 0,
+    "ExposedQualityDamage": 0,
+    "StaggerAmount": 0,
+    "BaseWarmUp": 1,
     "Animation": null,
     "AnimationNumber": 0
 }

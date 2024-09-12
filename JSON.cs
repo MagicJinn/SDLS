@@ -6,14 +6,8 @@ namespace SDLS
 {
         public static class JSON
         {
-                private static JsonReader JSONReader;
-                private static JsonWriter JSONWriter;
-
-                public static void PrepareJSONManipulation()
-                {
-                        JSONReader = new JsonReader();
-                        JSONWriter = new JsonWriter();
-                }
+                private static readonly JsonReader JSONReader = new JsonReader();
+                private static readonly JsonWriter JSONWriter = new JsonWriter();
 
                 public static string ReadGameJson(string relativeFilePath)
                 {
@@ -34,7 +28,7 @@ namespace SDLS
 
                 public static Dictionary<string, object> Deserialize(string strObj)
                 {
-                        Dictionary<string, object> deserializedData = JSONReader.Read<Dictionary<string, object>>(strObj);
+                        var deserializedData = JSONReader.Read<Dictionary<string, object>>(strObj);
                         return deserializedData;
                 }
 
@@ -54,42 +48,38 @@ namespace SDLS
                         return string.Join(sign, strList.ToArray());
                 }
 
-                public static string[] GetFilePaths()
+                public static string[] GetFilePaths() => new[]
                 {
-                        return new string[] { // All possible files able to be modded (with .json removed)
-                                    "entities/qualities",
-                                    "entities/areas",
-                                    "entities/events",
-                                    "entities/exchanges",
-                                    "entities/personas",
-                                    "geography/TileRules",
-                                    "geography/Tiles",
-                                    "geography/TileSets",
-                                    "encyclopaedia/CombatAttacks",
-                                    "encyclopaedia/CombatItems",
-                                    "encyclopaedia/SpawnedEntities",
-                                    "encyclopaedia/Associations",
-                                    "encyclopaedia/Tutorials",
-                                    "encyclopaedia/Flavours",
-                                    "constants/combatconstants",
-                                    "constants/navigationconstants"
-        };
-                }
+                "entities/qualities",
+                "entities/areas",
+                "entities/events",
+                "entities/exchanges",
+                "entities/personas",
+                "geography/TileRules",
+                "geography/Tiles",
+                "geography/TileSets",
+                "encyclopaedia/CombatAttacks",
+                "encyclopaedia/CombatItems",
+                "encyclopaedia/SpawnedEntities",
+                "encyclopaedia/Associations",
+                "encyclopaedia/Tutorials",
+                "encyclopaedia/Flavours",
+                "constants/combatconstants",
+                "constants/navigationconstants"
+                };
 
-                public static string[] ComponentsWithoutId()
+                public static string[] ComponentsWithoutId() => new[]
                 {
-                        return new string[] {
-                                "geography/TileRules",
-                                "geography/Tiles",
-                                "geography/TileSets",
-                                "encyclopaedia/CombatAttacks",
-                                "encyclopaedia/CombatItems",
-                                "encyclopaedia/SpawnedEntities",
-                                "encyclopaedia/Associations",
-                                "encyclopaedia/Flavours",
-                                "constants/combatconstants",
-                                "constants/navigationconstants"
-                        };
-                }
+                "geography/TileRules",
+                "geography/Tiles",
+                "geography/TileSets",
+                "encyclopaedia/CombatAttacks",
+                "encyclopaedia/CombatItems",
+                "encyclopaedia/SpawnedEntities",
+                "encyclopaedia/Associations",
+                "encyclopaedia/Flavours",
+                "constants/combatconstants",
+                "constants/navigationconstants"
+                };
         }
 }

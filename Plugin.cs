@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
+using System.Threading;
 
 namespace SDLS
 {
@@ -21,6 +22,8 @@ namespace SDLS
         private bool doCleanup; // Whether the files created by SDLS should be cleared during shutdown
         private bool logDebugTimers;
         // Config options end
+
+        string persistentDataPath;
 
         // Tracks every file SDLS creates. Used during cleanup
         private List<string> createdFiles = new();
@@ -46,17 +49,24 @@ namespace SDLS
 
         private void Awake( /* Run by Unity on game start */ )
         {
+            ThreadPool.QueueUserWorkItem(state => Initialization()); // Run Initialization in a different thread
+            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+        }
+
+        private void Initialization()
+        {
             JSON.PrepareJSONManipulation();
 
             LoadConfig();
+            persistentDataPath = Application.persistentDataPath;
 
-            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
             InitializationLine();
 
             DebugTimer("TrashAllJSON");
             TrashAllJSON();
             DebugTimer("TrashAllJSON");
         }
+
 
         void OnApplicationQuit( /* Run by Unity on game exit */ )
         {
@@ -76,8 +86,9 @@ namespace SDLS
         private void TrashAllJSON()
         {
             string[] filePaths = JSON.GetFilePaths(); // List of all possible moddable files
-
             componentNames = FindComponents(); // list of each default component
+
+            var resetEvents = new List<ManualResetEvent>(); // List to track all the async tasks
 
             // if (doMerge && basegameMerge)
             // {
@@ -96,48 +107,70 @@ namespace SDLS
             {
                 foreach (string filePath in filePaths)
                 {
-                    string modFolderInAddon = Path.Combine("addon", modFolder);
-                    string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
+                    var resetEvent = new ManualResetEvent(false);
+                    resetEvents.Add(resetEvent);
 
-                    string fileContent = JSON.ReadGameJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
-                    if (fileContent == null) fileContent = JSON.ReadGameJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
 
-                    if (fileContent != null)
+                    ThreadPool.QueueUserWorkItem(state =>
                     {
-                        string fileName = GetLastWord(fullRelativePath);
+                        try
+                        {
 
-                        DebugTimer("Trash " + fullRelativePath);
+                            string modFolderInAddon = Path.Combine("addon", modFolder);
+                            string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
 
-                        currentModName = fullRelativePath;
+                            string fileContent = JSON.ReadGameJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
+                            if (fileContent == null) fileContent = JSON.ReadGameJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
 
-                        // if (doMerge)
-                        // {
-                        //     DebugTimer("Merge " + fullRelativePath);
-                        //     RemoveJSON(fullRelativePath);
-                        //     MergeMods(fileContent, filePath);
+                            if (fileContent != null)
+                            {
+                                string fileName = GetLastWord(fullRelativePath);
+
+                                DebugTimer("Trash " + fullRelativePath);
+
+                                currentModName = fullRelativePath;
+
+                                // if (doMerge)
+                                // {
+                                //     DebugTimer("Merge " + fullRelativePath);
+                                //     RemoveJSON(fullRelativePath);
+                                //     MergeMods(fileContent, filePath);
 
 
-                        //     Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, modFolderInAddon));
-                        //     string trashedJSON = TrashJSON(fileContent, fileName);
-                        //     DebugTimer("Merge " + fullRelativePath);
-                        //     DebugTimer("Trash " + fullRelativePath);
-                        // }
-                        // else
-                        // {
-                        //     RemoveDirectory("SDLS_MERGED");
+                                //     Directory.CreateDirectory(Path.Combine(persistentDataPath, modFolderInAddon));
+                                //     string trashedJSON = TrashJSON(fileContent, fileName);
+                                //     DebugTimer("Merge " + fullRelativePath);
+                                //     DebugTimer("Trash " + fullRelativePath);
+                                // }
+                                // else
+                                // {
+                                //     RemoveDirectory("SDLS_MERGED");
 
-                        string trashedJSON = TrashJSON(fileContent, fileName);
-                        DebugTimer("Trash " + fullRelativePath);
+                                string trashedJSON = TrashJSON(fileContent, fileName);
+                                DebugTimer("Trash " + fullRelativePath);
 
-                        DebugTimer("Create " + fullRelativePath);
-                        CreateJSON(trashedJSON, fullRelativePath);
-                        DebugTimer("Create " + fullRelativePath);
+                                DebugTimer("Create " + fullRelativePath);
+                                CreateJSON(trashedJSON, fullRelativePath);
+                                DebugTimer("Create " + fullRelativePath);
 
-                        // }
-                    }
+                                // }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Error($"Error processing file {filePath}: {ex.Message}");
+                        }
+                        finally
+                        {
+                            resetEvent.Set();
+                        }
+                    });
                 }
             }
-            if (doMerge)
+
+            WaitHandle.WaitAll(resetEvents.ToArray());
+
+            if (false/* || doMerge*/) // Disabled due to WIP
             {
                 Warn("DO NOT DISTRIBUTE MERGED JSON. IT WILL CONTAIN ALL MODS YOU HAVE INSTALLED, WHICH BELONG TO THEIR RESPECTIVE MOD AUTHORS.");
                 foreach (var fileDictEntry in mergedModsDict)
@@ -366,17 +399,16 @@ namespace SDLS
 
         private void CreateJSON(string strObjJoined, string relativeWritePath)
         {
-            string writePath = Path.Combine(Application.persistentDataPath, relativeWritePath) + ".json";
+            string writePath = Path.Combine(persistentDataPath, relativeWritePath) + ".json";
             string path = GetParentPath(writePath);
 
             try
             {
-                if (!Directory.Exists(path))
-                    Directory.CreateDirectory(path);
-
+                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
                 File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
                 ? strObjJoined : // Output file as a single object
                 $"[{strObjJoined}]"); // Put file in an array
+
                 Log("Created new file at " + relativeWritePath);
                 createdFiles.Add(relativeWritePath);
             }
@@ -388,7 +420,7 @@ namespace SDLS
 
         private void RemoveJSON(string relativeFilePath)
         {
-            string path = Application.persistentDataPath + "/";
+            string path = persistentDataPath + "/";
             string filePath = path + relativeFilePath + ".json";
             if (File.Exists(filePath))
             {
@@ -400,7 +432,7 @@ namespace SDLS
         private void RemoveDirectory(string relativePath) // Removes any directory in Addon
         {
             string relativePathDirectory = Path.Combine("addon", relativePath);
-            string path = Path.Combine(Application.persistentDataPath, relativePathDirectory);
+            string path = Path.Combine(persistentDataPath, relativePathDirectory);
 
             try
             {

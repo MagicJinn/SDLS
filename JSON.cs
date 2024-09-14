@@ -1,3 +1,4 @@
+using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
@@ -43,9 +44,17 @@ namespace SDLS
                         return objects.ToArray();
                 }
 
-                public static string JoinJSON(List<string> strList, string sign = ",") // Rejoins all JSON objects
+                public static string JoinJSON(List<string> strList, string sign = ",")
                 {
-                        return string.Join(sign, strList.ToArray());
+                        if (strList.Count == 0) return string.Empty;
+
+                        var sb = new StringBuilder();
+                        for (int i = 0; i < strList.Count - 1; i++)
+                        {
+                                sb.Append(strList[i]).Append(sign);
+                        }
+                        sb.Append(strList[strList.Count - 1]);
+                        return sb.ToString();
                 }
 
                 public static string[] GetFilePaths() => new[]

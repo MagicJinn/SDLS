@@ -48,7 +48,8 @@ namespace SDLS
 
         private void Awake( /* Run by Unity on game start */ )
         {
-            ThreadPool.QueueUserWorkItem(state => Initialization()); // Run Initialization in a different thread
+            // Run Initialization in a different thread, allowing the game to continue loading
+            ThreadPool.QueueUserWorkItem(state => Initialization());
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
         }
 
@@ -86,16 +87,6 @@ namespace SDLS
 
             var resetEvents = new List<ManualResetEvent>(); // List to track all the async tasks
 
-            // if (doMerge && basegameMerge)
-            // {
-            //     foreach (string filePath in filePaths)
-            //     {
-            //         DebugTimer("Basegame merge " + filePath);
-            //         GetBasegameData(filePath);
-            //         DebugTimer("Basegame merge " + filePath);
-            //     }
-            // }
-
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
@@ -103,14 +94,13 @@ namespace SDLS
             {
                 foreach (string filePath in filePaths)
                 {
-                    var resetEvent = new ManualResetEvent(false);
-                    resetEvents.Add(resetEvent);
+                    var resetEvent = new ManualResetEvent(false); // New event to track the completion of a task
+                    resetEvents.Add(resetEvent); // Add the event to the list of events
 
-                    ThreadPool.QueueUserWorkItem(state =>
+                    ThreadPool.QueueUserWorkItem(state => // Run the task in a different thread
                     {
                         try
                         {
-
                             string modFolderInAddon = Path.Combine("addon", modFolder);
                             string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
 
@@ -123,7 +113,7 @@ namespace SDLS
 
                                 DebugTimer("Trash " + fullRelativePath);
 
-                                currentModName = fullRelativePath;
+                                currentModName = fullRelativePath; // Track current mod to log conflicts
 
                                 // if (doMerge)
                                 // {
@@ -157,7 +147,7 @@ namespace SDLS
                         }
                         finally
                         {
-                            resetEvent.Set();
+                            resetEvent.Set(); // Signal that the task has completed
                         }
                     });
                 }
@@ -165,26 +155,26 @@ namespace SDLS
 
             WaitHandle.WaitAll(resetEvents.ToArray());
 
-            if (false/* || doMerge*/) // Disabled due to WIP
-            {
-                Warn("DO NOT DISTRIBUTE MERGED JSON. IT WILL CONTAIN ALL MODS YOU HAVE INSTALLED, WHICH BELONG TO THEIR RESPECTIVE MOD AUTHORS.");
-                foreach (var fileDictEntry in mergedModsDict)
-                {
-                    string fileName = fileDictEntry.Key;
-                    var objectsDict = fileDictEntry.Value;
-                    var JSONObjList = new List<string>();
+            // if (false/* || doMerge*/) // Disabled due to WIP
+            // {
+            //     Warn("DO NOT DISTRIBUTE MERGED JSON. IT WILL CONTAIN ALL MODS YOU HAVE INSTALLED, WHICH BELONG TO THEIR RESPECTIVE MOD AUTHORS.");
+            //     foreach (var fileDictEntry in mergedModsDict)
+            //     {
+            //         string fileName = fileDictEntry.Key;
+            //         var objectsDict = fileDictEntry.Value;
+            //         var JSONObjList = new List<string>();
 
-                    foreach (var objDict in objectsDict)
-                    {
-                        JSONObjList.Add(JSON.Serialize(objDict.Value));
-                    }
+            //         foreach (var objDict in objectsDict)
+            //         {
+            //             JSONObjList.Add(JSON.Serialize(objDict.Value));
+            //         }
 
-                    string trashedJSON = TrashJSON(JSON.JoinJSON(JSONObjList), fileName); // Join all JSON together and Trash it like you would any other JSON
-                    string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
-                    CreateJSON(trashedJSON, Path.Combine(pathTo, fileDictEntry.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
-                }
-                DebugTimer("LogConflictsToFile"); LogConflictsToFile(); DebugTimer("LogConflictsToFile");
-            }
+            //         string trashedJSON = TrashJSON(JSON.JoinJSON(JSONObjList), fileName); // Join all JSON together and Trash it like you would any other JSON
+            //         string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
+            //         CreateJSON(trashedJSON, Path.Combine(pathTo, fileDictEntry.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
+            //     }
+            //     DebugTimer("LogConflictsToFile"); LogConflictsToFile(); DebugTimer("LogConflictsToFile");
+            // }
         }
 
         private string TrashJSON(string strObjJoined, string name)
@@ -245,8 +235,6 @@ namespace SDLS
             if (tracedValue is IEnumerable<object> array)
             {
                 var castedArray = array.Cast<Dictionary<string, object>>().ToList();
-
-                // Check if baselineObject is of the correct type, if not, pass null
                 return HandleArray(castedArray, tracedKey);
             }
             else
@@ -274,7 +262,6 @@ namespace SDLS
             }
             else if (fieldValue is IEnumerable<object> array)
             {
-
                 return array.Select(item => HandleDefault(item)).ToList();
             }
             else
@@ -294,15 +281,9 @@ namespace SDLS
             {
                 if (item is Dictionary<string, object> itemDict) // If the item is a dictionary (eg, storylet, quality etc)
                 {
-                    // "convert" the object HandleObject returns into a dictionary, since the function itself cannot be altered
-                    // AE Arrays will never contain another array
-                    // But if I don't fix it the compiler won't stop complaining
                     arrayToMergeInto.Add((Dictionary<string, object>)HandleObject(itemDict, fieldName));
-
                 }
-                // Else, if the item is a value (for example, "SubsurfaceWeather", results in ["value"])
-                else arrayToMergeInto.Add(item);
-
+                else arrayToMergeInto.Add(item); // Else, if the item is a value (for example, "SubsurfaceWeather", results in ["value"])
             }
             return arrayToMergeInto;
         }
@@ -380,7 +361,10 @@ namespace SDLS
 
         private string GetLastWord(string str)
         {
-            string result = str.Split(new char[] { '/', '\\' }).Last(/*Returns only the resource name*/);
+            if (str.IndexOfAny(new char[] { '/', '\\' }) == -1) return str; // No separators found, return the original string
+
+            string result = str.Split(new char[] { '/', '\\' }).Last();
+
             return result;
         }
 
@@ -554,34 +538,31 @@ namespace SDLS
             else
             {
                 Warn("Config not found or corrupt, using default values.");
-                string file = ReadTextResource(GetEmbeddedPath() + CONFIG);
+                string file = ReadTextResource(GetEmbeddedPath() + CONFIG); // Get the default config from the embedded resources
 
-                lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
             }
 
-            var optionsDict = new Dictionary<string, string>();
+            var optionsDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 foreach (var line in lines)
                 {
-                    if (line.Contains('=')) // Check if the line contains an '=' character
+                    if (line.Contains('=')) // Check if the line contains an '=' character so it's a valid config line
                     {
                         // Remove all spaces from the line and split it at the first occurrence of '=' into two parts
                         string[] keyValue = line.Replace(" ", "").Split(new[] { '=' }, 2);
-                        optionsDict.Add(keyValue[0], keyValue[1]);
+                        optionsDict[keyValue[0]] = keyValue[1]; // Add the key and value to the dictionary
                     }
                 }
 
-                doMerge = bool.Parse(optionsDict["doMerge"]);
-                logConflicts = doMerge ? // Respect log conflicts option if merging is enabled
-                                    bool.Parse(optionsDict["logMergeConflicts"]) :
-                                    false;
+                doMerge = bool.Parse(optionsDict["domerge"]);
+                logConflicts = doMerge ? bool.Parse(optionsDict["logmergeconflicts"]) : false;
+                basegameMerge = doMerge ? bool.Parse(optionsDict["basegamemerge"]) : false;
 
-                basegameMerge = bool.Parse(optionsDict["basegameMerge"]);
+                doCleanup = bool.Parse(optionsDict["docleanup"]);
 
-                doCleanup = bool.Parse(optionsDict["doCleanup"]);
-
-                logDebugTimers = bool.Parse(optionsDict["logDebugTimers"]);
+                logDebugTimers = bool.Parse(optionsDict["logdebugtimers"]);
             }
             catch (Exception)
             {
@@ -592,17 +573,18 @@ namespace SDLS
         private void DebugTimer(string name)
         {
             if (!logDebugTimers) return;
-            if (!DebugTimers.ContainsKey(name))
-            {
-                // Start a new timer
-                Log("Starting process " + name);
-                DebugTimers[name] = new Stopwatch();
-                DebugTimers[name].Start();
+
+            if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
+            { // Start a new timer
+                Log(string.Format("Starting process {0}", name));
+                stopwatch = new Stopwatch();
+                stopwatch.Start();
+                DebugTimers[name] = stopwatch;
             }
-            else if (DebugTimers[name].IsRunning)
+            else if (stopwatch.IsRunning)
             { // Stop the timer and log the result
-                DebugTimers[name].Stop();
-                Log($"Finished process {name}. Took {DebugTimers[name].Elapsed.TotalSeconds:F3} seconds.");
+                stopwatch.Stop();
+                Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
             }
             else
             { // Removes the timer and starts it again

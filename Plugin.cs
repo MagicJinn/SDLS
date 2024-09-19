@@ -72,7 +72,6 @@ namespace SDLS
                 fastLoader = fastLoadObject.AddComponent<FastLoad>();
                 fastLoader.Initialize(initializationCompletedEvent);
 
-                SceneManager.sceneLoaded += fastLoader.OnSceneLoaded;
                 StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
             }
         }

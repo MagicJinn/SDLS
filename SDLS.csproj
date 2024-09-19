@@ -29,7 +29,6 @@
     <!-- Include the default settings ini file as fallback -->
     <EmbeddedResource Include="SDLS_Config.ini" />
 
-    <!-- Include all JSON files in all subdirectories of Sunless Sea -->
     <!-- Include all JSON files -->
     <EmbeddedResource Include="default/*.json" />
 </ItemGroup>

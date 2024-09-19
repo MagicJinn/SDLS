@@ -56,9 +56,10 @@ namespace SDLS
         {
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
+            LoadConfig();
+
             // Pass initializationCompletedEvent into InitializationProcess to track the event without making it global
             var initializationCompletedEvent = new ManualResetEvent(false);
-
             // Start SDLS main initialization process
             ThreadPool.QueueUserWorkItem(state => InitializationProcess(initializationCompletedEvent));
 
@@ -86,8 +87,6 @@ namespace SDLS
 
         private void Initialization()
         {
-            LoadConfig();
-
             InitializationLine();
 
             DebugTimer("TrashAllJSON");

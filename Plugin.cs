@@ -612,14 +612,14 @@ namespace SDLS
         }
 
         // Simplified log functions
-        private void Log(object message) { Logger.LogInfo(message); }
-        private void Warn(object message) { Logger.LogWarning(message); }
-        private void Error(object message) { Logger.LogError(message); }
+        public void Log(object message) { Logger.LogInfo(message); }
+        public void Warn(object message) { Logger.LogWarning(message); }
+        public void Error(object message) { Logger.LogError(message); }
 #if DEBUG
         // Log functions that don't run when built in Release mode
-        private void DLog(object message){Log(message);}
-        private void DWarn(object message){Warn(message);}
-        private void DError(object message){Error(message);}
+        public void DLog(object message) { Log(message); }
+        public void DWarn(object message) { Warn(message); }
+        public void DError(object message) { Error(message); }
 #else
         // Empty overload methods to make sure the plugin doesn't crash when built in release mode
         private void DLog(object message) { }

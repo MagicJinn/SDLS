@@ -13,10 +13,15 @@ namespace SDLS
         private const float FadeDuration = 2.0f; // Fade duration in seconds
         private const string TransitionPanelName = "TransitionPanel";
 
+        // Variables related to muting the background music while loading
+        private bool keepMuted = false;
+        private AudioSource backgroundMusic;
+        private Coroutine muteCoroutine;
+
         public bool isInitializationComplete = false; // Track whether regular SDLS initialization is complete
         private ManualResetEvent initializationCompletedEvent; // Event to signal when SDLS initialization is complete
         private bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
-        List<Canvas> disabledCanvases = new List<Canvas>();
+        List<Canvas> disabledCanvases = new();
 
         public void Initialize(ManualResetEvent initEvent)
         {
@@ -47,11 +52,50 @@ namespace SDLS
 
         private IEnumerator HideUIUntilInitComplete()
         {
-            // Hide UI elements until the Repository initiation is complete
             yield return new WaitForEndOfFrame();
             DisableAllUIElements();
+            StartForceMuteBackgroundMusic();
             yield return new WaitUntil(() => isInitializationComplete && isRepositoryManagerInitComplete);
             EnableAllUIElements();
+            UnmuteAndRestartBackgroundMusic();
+        }
+
+        private void StartForceMuteBackgroundMusic()
+        {
+            AudioSource[] audioSources = FindObjectsOfType<AudioSource>(); // Get audiosources
+            // Find the audiosource playing the main menu music
+            backgroundMusic = audioSources.FirstOrDefault(source => source.clip != null && source.clip.name == "OpeningScreenNoMelody");
+
+            if (backgroundMusic != null)
+            {
+                keepMuted = true;
+
+                muteCoroutine = StartCoroutine(ForceMuteCoroutine());
+            }
+            else Plugin.Instance.Warn("No background music AudioSource found to mute.");
+
+        }
+
+        private IEnumerator ForceMuteCoroutine()
+        {
+            while (keepMuted && backgroundMusic != null)
+            {
+                backgroundMusic.volume = 0f;
+                yield return null; // Wait for the next frame
+            }
+        }
+
+        private void UnmuteAndRestartBackgroundMusic()
+        {
+            keepMuted = false;
+            if (muteCoroutine != null)
+            {
+                StopCoroutine(muteCoroutine);
+                muteCoroutine = null; // Delete muteCoroutine
+            }
+
+            backgroundMusic.volume = 1f; // Reset original volume
+            backgroundMusic.time = 0f; // Reset to the beginning of the track
         }
 
         private void DisableAllUIElements()
@@ -96,5 +140,6 @@ namespace SDLS
                 Destroy(gameObject); // Destroy the FastLoad object once everything is done
             }
         }
+
     }
 }

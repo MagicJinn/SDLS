@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using Sunless.Game.Utilities;
 using System.Threading;
+using UnityEngine.SceneManagement;
+
 
 namespace SDLS
 {
@@ -16,17 +18,15 @@ namespace SDLS
     {
         // Config options
         private const string CONFIG = "SDLS_Config.ini";
-        private bool doMerge;
-        private bool logConflicts;
-        private bool basegameMerge;
-        private bool doCleanup; // Whether the files created by SDLS should be cleared during shutdown
-        private bool logDebugTimers;
+        private bool doMerge = true;
+        private bool logConflicts = true;
+        private bool basegameMerge = true;
+        private bool doCleanup = true; // Whether the files created by SDLS should be cleared during shutdown
+        private bool logDebugTimers = true;
+        private bool fastLoad = true;
         // Config options end
 
         private readonly string persistentDataPath = Application.persistentDataPath;
-
-        // Tracks every file SDLS creates. Used during cleanup
-        private List<string> createdFiles = new();
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
         private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
@@ -44,13 +44,45 @@ namespace SDLS
         //    - int: Id of an entry, either Id or Name or AssociatedQualityId.
         //    - Dictionary<string, object>: The actual data from a JSON object.
         //       - string: The key from the JSON object.
-        //       - object: The value, which can be a primitive value or a nested object.wi
+        //       - object: The value, which can be a primitive value or a nested object.
+
+
+        // Tracks every file SDLS creates. Used during cleanup
+        private List<string> createdFiles = new();
+        public static Plugin Instance { get; private set; }
+        private FastLoad fastLoader;
 
         private void Awake( /* Run by Unity on game start */ )
         {
-            // Run Initialization in a different thread, allowing the game to continue loading
-            ThreadPool.QueueUserWorkItem(state => Initialization());
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+
+            // Pass initializationCompletedEvent into InitializationProcess to track the event without making it global
+            var initializationCompletedEvent = new ManualResetEvent(false);
+
+            // Start SDLS main initialization process
+            ThreadPool.QueueUserWorkItem(state => InitializationProcess(initializationCompletedEvent));
+
+            if (fastLoad)
+            {
+                Instance = this;
+
+                // Create a new GameObject and attach FastLoad to it
+                GameObject fastLoadObject = new GameObject("FastLoad");
+                DontDestroyOnLoad(fastLoadObject);
+                fastLoader = fastLoadObject.AddComponent<FastLoad>();
+                fastLoader.Initialize(initializationCompletedEvent);
+
+                SceneManager.sceneLoaded += fastLoader.OnSceneLoaded;
+                StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
+            }
+        }
+
+        private void InitializationProcess(ManualResetEvent initializationCompletedEvent)
+        {
+            Initialization();
+            // Signal that initialization is complete
+            fastLoader.isInitializationComplete = true;
+            initializationCompletedEvent.Set();
         }
 
         private void Initialization()
@@ -60,10 +92,17 @@ namespace SDLS
             InitializationLine();
 
             DebugTimer("TrashAllJSON");
-            TrashAllJSON();
+            try
+            {
+                TrashAllJSON();
+            }
+            catch (Exception ex)
+            {
+                Error($"Exception in TrashAllJSON: {ex.Message}");
+                Error($"Stack trace: {ex.StackTrace}");
+            }
             DebugTimer("TrashAllJSON");
         }
-
 
         void OnApplicationQuit( /* Run by Unity on game exit */ )
         {
@@ -86,7 +125,7 @@ namespace SDLS
             componentNames = FindComponents(); // list of each default component
 
             var resetEvents = new List<ManualResetEvent>(); // List to track all the async tasks
-
+            const int batchSize = 60; // Slightly less than the maximum of 64 to be safe
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
@@ -94,10 +133,10 @@ namespace SDLS
             {
                 foreach (string filePath in filePaths)
                 {
-                    var resetEvent = new ManualResetEvent(false); // New event to track the completion of a task
-                    resetEvents.Add(resetEvent); // Add the event to the list of events
+                    var resetEvent = new ManualResetEvent(false);
+                    resetEvents.Add(resetEvent);
 
-                    ThreadPool.QueueUserWorkItem(state => // Run the task in a different thread
+                    ThreadPool.QueueUserWorkItem(state =>
                     {
                         try
                         {
@@ -115,30 +154,12 @@ namespace SDLS
 
                                 currentModName = fullRelativePath; // Track current mod to log conflicts
 
-                                // if (doMerge)
-                                // {
-                                //     DebugTimer("Merge " + fullRelativePath);
-                                //     RemoveJSON(fullRelativePath);
-                                //     MergeMods(fileContent, filePath);
-
-
-                                //     Directory.CreateDirectory(Path.Combine(persistentDataPath, modFolderInAddon));
-                                //     string trashedJSON = TrashJSON(fileContent, fileName);
-                                //     DebugTimer("Merge " + fullRelativePath);
-                                //     DebugTimer("Trash " + fullRelativePath);
-                                // }
-                                // else
-                                // {
-                                //     RemoveDirectory("SDLS_MERGED");
-
                                 string trashedJSON = TrashJSON(fileContent, fileName);
                                 DebugTimer("Trash " + fullRelativePath);
 
                                 DebugTimer("Create " + fullRelativePath);
                                 CreateJSON(trashedJSON, fullRelativePath);
                                 DebugTimer("Create " + fullRelativePath);
-
-                                // }
                             }
                         }
                         catch (Exception ex)
@@ -147,34 +168,23 @@ namespace SDLS
                         }
                         finally
                         {
-                            resetEvent.Set(); // Signal that the task has completed
+                            resetEvent.Set();
                         }
                     });
+
+                    // If we've queued up a batch, wait for it to complete
+                    if (resetEvents.Count >= batchSize)
+                    {
+                        WaitHandle.WaitAll(resetEvents.ToArray());
+                        resetEvents.Clear();
+                    }
                 }
             }
-
-            WaitHandle.WaitAll(resetEvents.ToArray());
-
-            // if (false/* || doMerge*/) // Disabled due to WIP
-            // {
-            //     Warn("DO NOT DISTRIBUTE MERGED JSON. IT WILL CONTAIN ALL MODS YOU HAVE INSTALLED, WHICH BELONG TO THEIR RESPECTIVE MOD AUTHORS.");
-            //     foreach (var fileDictEntry in mergedModsDict)
-            //     {
-            //         string fileName = fileDictEntry.Key;
-            //         var objectsDict = fileDictEntry.Value;
-            //         var JSONObjList = new List<string>();
-
-            //         foreach (var objDict in objectsDict)
-            //         {
-            //             JSONObjList.Add(JSON.Serialize(objDict.Value));
-            //         }
-
-            //         string trashedJSON = TrashJSON(JSON.JoinJSON(JSONObjList), fileName); // Join all JSON together and Trash it like you would any other JSON
-            //         string pathTo = Path.Combine("addon", "SDLS_MERGED"); // Gets output path
-            //         CreateJSON(trashedJSON, Path.Combine(pathTo, fileDictEntry.Key)); // Creates JSON files in a designated SDLS_MERGED output folder
-            //     }
-            //     DebugTimer("LogConflictsToFile"); LogConflictsToFile(); DebugTimer("LogConflictsToFile");
-            // }
+            // Wait for any remaining handles
+            if (resetEvents.Count > 0)
+            {
+                WaitHandle.WaitAll(resetEvents.ToArray());
+            }
         }
 
         private string TrashJSON(string strObjJoined, string name)
@@ -287,51 +297,6 @@ namespace SDLS
             }
             return arrayToMergeInto;
         }
-
-        // private void GetBasegameData(string relativeFilePath)
-        // {
-        //     string strObjJoined = JSON.ReadGameJson(relativeFilePath + ".json");
-        //     MergeMods(strObjJoined, relativeFilePath);
-        // }
-
-        // private void MergeMods(string strObjJoined, string relativeFilePath) // Running this will add inputData to the mergedMods registry
-        // {
-        //     string fileName = GetLastWord(relativeFilePath);
-
-        //     var embeddedData = GetAComponent(fileName);
-
-        //     // Creates entries for mod in a dictionary that can be referenced later.
-        //     // Names like entities/events, which will be used later to create JSON files in the correct locations.
-        //     if (!mergedModsDict.ContainsKey(relativeFilePath))
-        //     {
-        //         mergedModsDict[relativeFilePath] = new Dictionary<int, Dictionary<string, object>>(); // A list of dictionaries, with each dictionary being a JSON object
-        //     }
-
-
-        //     foreach (string strObjSplit in JSON.SplitJSON(strObjJoined)) // Adds each JSON object to the Mergemods name category
-        //     {
-        //         var deserializedJSON = JSON.Deserialize(strObjSplit);
-
-        //         int Id;
-        //         if (relativeFilePath.StartsWith("constants")) Id = 0; // Constants must always overwrite eachother, there are no different objects in constants
-        //         else
-        //         {
-        //             Id = NameOrId(deserializedJSON); // Name is converted to an integer during processing (REMEMBER THIS)
-        //         }
-
-        //         if (mergedModsDict[relativeFilePath].ContainsKey(Id)) // Begin the merging process if an object is already present.
-        //         {
-        //             Dictionary<string, object> tracedTree = deserializedJSON;
-        //             Dictionary<string, object> mergeTree = mergedModsDict[relativeFilePath][Id];
-        //             Dictionary<string, object> compareData = embeddedData;
-
-        //             mergedModsDict[relativeFilePath][Id] = ApplyFieldsToMold(tracedTree, mergeTree);
-        //         }
-        //         else mergedModsDict[relativeFilePath][Id] = deserializedJSON; // Add the inputObject to the registry if there is no entry there
-        //     }
-        //     // Nothing happens at the end of this function, as this function only runs inside of a foreach loop
-        //     // and once it concludes other code begins to run, which will create and save the JSON.
-        // }
 
         private int NameOrId(Dictionary<string, object> JSONObj)
         {
@@ -563,6 +528,8 @@ namespace SDLS
                 doCleanup = bool.Parse(optionsDict["docleanup"]);
 
                 logDebugTimers = bool.Parse(optionsDict["logdebugtimers"]);
+
+                fastLoad = bool.Parse(optionsDict["fastload"]);
             }
             catch (Exception)
             {
@@ -570,7 +537,7 @@ namespace SDLS
             }
         }
 
-        private void DebugTimer(string name)
+        public void DebugTimer(string name)
         {
             if (!logDebugTimers) return;
 

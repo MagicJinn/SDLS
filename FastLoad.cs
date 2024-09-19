@@ -21,6 +21,8 @@ namespace SDLS
         public void Initialize(ManualResetEvent initEvent)
         {
             initializationCompletedEvent = initEvent;
+
+            SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
         public IEnumerator WaitForInitAndStartRepositoryManager()
@@ -78,13 +80,21 @@ namespace SDLS
 
         private IEnumerator FadeInCanvas(CanvasGroup canvasGroup)
         {
-            float elapsedTime = 0f; while (elapsedTime < FadeDuration)
+            if (canvasGroup == null || !canvasGroup.gameObject.activeInHierarchy) yield break; // Exit if canvasGroup is null or inactive
+
+            float elapsedTime = 0f; while (elapsedTime < FadeDuration && canvasGroup != null && canvasGroup.gameObject.activeInHierarchy)
             {
                 elapsedTime += Time.deltaTime;
                 canvasGroup.alpha = Mathf.Clamp01(elapsedTime / FadeDuration);
                 yield return null;
             }
-            Destroy(gameObject); // Destroy the FastLoad object once everything is done
+
+            // Only remove the event listener and destroy the object if we've completed the fade
+            if (elapsedTime >= FadeDuration)
+            {
+                SceneManager.sceneLoaded -= OnSceneLoaded; // Remove the scene loaded event listener
+                Destroy(gameObject); // Destroy the FastLoad object once everything is done
+            }
         }
     }
 }

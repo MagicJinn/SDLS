@@ -77,18 +77,18 @@ namespace SDLS
                 "constants/navigationconstants"
                 };
 
-                public static string[] ComponentsWithoutId() => new[]
-                {
-                "geography/TileRules",
-                "geography/Tiles",
-                "geography/TileSets",
-                "encyclopaedia/CombatAttacks",
-                "encyclopaedia/CombatItems",
-                "encyclopaedia/SpawnedEntities",
-                "encyclopaedia/Associations",
-                "encyclopaedia/Flavours",
-                "constants/combatconstants",
-                "constants/navigationconstants"
-                };
+                // public static string[] ComponentsWithoutId() => new[]
+                // {
+                // "geography/TileRules",
+                // "geography/Tiles",
+                // "geography/TileSets",
+                // "encyclopaedia/CombatAttacks",
+                // "encyclopaedia/CombatItems",
+                // "encyclopaedia/SpawnedEntities",
+                // "encyclopaedia/Associations",
+                // "encyclopaedia/Flavours",
+                // "constants/combatconstants",
+                // "constants/navigationconstants"
+                // };
         }
 }

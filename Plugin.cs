@@ -468,7 +468,7 @@ namespace SDLS
                 // And if we are, return TilesTiles instead, since TilesTiles is only used inside of Tiles.json
                 // We set TilesSpecialCase to false after we handle the Tiles object.
 
-                if (componentName == "Tiles" && TilesSpecialCase) // If Tiles is requested, but TilesSpecialCase is true, it means it has been requested before in this instance, meaning it should 
+                if (componentName == "Tiles" && TilesSpecialCase)
                 {
                     componentName = "TilesTiles"; // Set the name to TilesTiles to return the correct component
                     if (!componentCache.ContainsKey("TilesTiles")) // If the TilesTiles component hasn't been added, add it.

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
-using Sunless.Game.Utilities;
 using System.Threading;
 
 namespace SDLS
@@ -125,7 +124,7 @@ namespace SDLS
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
-            foreach (string modFolder in FileHelper.GetAllSubDirectories())
+            foreach (string modFolder in Directory.GetDirectories(Path.Combine(persistentDataPath, "addon")))
             {
                 foreach (string filePath in filePaths)
                 {

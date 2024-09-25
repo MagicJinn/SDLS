@@ -1,7 +1,8 @@
 using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
-using Sunless.Game.Utilities;
+using System.IO;
+
 
 namespace SDLS
 {
@@ -10,16 +11,17 @@ namespace SDLS
                 private static readonly JsonReader JSONReader = new JsonReader();
                 private static readonly JsonWriter JSONWriter = new JsonWriter();
 
-                public static string ReadGameJson(string relativeFilePath)
+                public static string ReadGameJson(string fullFilePath)
                 {
-                        string str = FileHelper.ReadTextFile(relativeFilePath);
+                        if (!File.Exists(fullFilePath)) return null; // Return null if the file is not found
+
+                        string str = File.ReadAllText(fullFilePath);
                         return (str != null) ?
                         (str.StartsWith("[") && str.EndsWith("]") ?
                          str.Substring(1, str.Length - 2) :
                          str) : // Return the string if the file isn't in an array
                          null; // Return null if the file is empty
                 }
-
 
                 public static string Serialize(object obj)
                 {

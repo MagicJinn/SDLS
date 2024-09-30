@@ -357,13 +357,12 @@ namespace SDLS
             }
         }
 
-        private void RemoveJSON(string relativeFilePath)
+        private void RemoveJSON(string fullpath)
         {
-            string path = persistentDataPath + "/";
-            string filePath = path + relativeFilePath + ".json";
+            string filePath = fullpath + ".json";
             if (File.Exists(filePath))
             {
-                Warn("Removing " + relativeFilePath);
+                Warn("Removing " + fullpath);
                 File.Delete(filePath);
             }
         }

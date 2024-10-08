@@ -1,29 +1,33 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-<PropertyGroup>
-    <!-- Default settings -->
+  <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
     <AssemblyName>SDLS</AssemblyName>
     <Description>Simplified Json Data Loading to remove the need for unused fields, leading to 30%-70% less code.</Description>
     <Version>1.5.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-</PropertyGroup>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
-    <PackageReference Include="BepInEx.Core" Version="5.*" />
-    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
-    <PackageReference Include="UnityEngine.Modules" Version="5.5.1" IncludeAssets="compile" />
+    <PackageReference Include="BepInEx.Core" Version="5.*">
+    </PackageReference>
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*">
+    </PackageReference>
+    <PackageReference Include="UnityEngine.Modules" Version="5.5.1" IncludeAssets="compile">
+    </PackageReference>
   </ItemGroup>
 
-<ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
     <Reference Include="Sunless.Game">
-        <HintPath>dependencies/Sunless.Game.dll</HintPath>
+      <HintPath>dependencies/Sunless.Game.dll</HintPath>
+      <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
     <Reference Include="JsonFx">
-        <HintPath>dependencies/JsonFX.dll</HintPath>
+      <HintPath>dependencies/JsonFX.dll</HintPath>
+      <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
 
     <!-- Include the default settings ini file as fallback -->
@@ -31,7 +35,6 @@
 
     <!-- Include all JSON files -->
     <EmbeddedResource Include="default/*.json" />
-</ItemGroup>
-
+  </ItemGroup>
 
 </Project>

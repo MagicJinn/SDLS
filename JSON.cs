@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
@@ -37,13 +38,44 @@ namespace SDLS
 
                 public static string[] SplitJSON(string strObjJoined)
                 {
-                        var objects = new List<string>();
+                        var jsonObjects = new List<string>();
                         for (int i = 0, depth = 0, start = 0; i < strObjJoined.Length; i++)
                         {
                                 if (strObjJoined[i] == '{' && depth++ == 0) start = i;
-                                if (strObjJoined[i] == '}' && --depth == 0) objects.Add(strObjJoined.Substring(start, i - start + 1));
+                                if (strObjJoined[i] == '}' && --depth == 0) jsonObjects.Add(strObjJoined.Substring(start, i - start + 1));
                         }
-                        return objects.ToArray();
+                        string[] jsonObjectsArray = jsonObjects.ToArray();
+                        return jsonObjectsArray;
+                }
+
+                public static void CreateJSON(string strObjJoined, string relativeWritePath)
+                {
+                        string writePath = Path.Combine(Plugin.Instance.persistentDataPath, relativeWritePath) + ".json";
+                        string path = Plugin.Instance.GetParentPath(writePath);
+
+                        try
+                        {
+                                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+                                File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
+                                ? strObjJoined : // Output file as a single object
+                                $"[{strObjJoined}]"); // Put file in an array
+
+                                Logging.Log("Created new file at " + relativeWritePath);
+                        }
+                        catch (Exception ex)
+                        {
+                                Logging.Error("Error writing file: " + ex.Message);
+                        }
+                }
+
+                public static void RemoveJSON(string fullpath)
+                {
+                        string filePath = fullpath + ".json";
+                        if (File.Exists(filePath))
+                        {
+                                Logging.Warn("Removing " + fullpath);
+                                File.Delete(filePath);
+                        }
                 }
 
                 public static string JoinJSON(List<string> strList, string sign = ",")

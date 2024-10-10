@@ -23,7 +23,7 @@ namespace SDLS
         private bool fastLoad = true;
         // Config options end
 
-        private readonly string persistentDataPath = Application.persistentDataPath;
+        public readonly string persistentDataPath = Application.persistentDataPath;
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
         private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
@@ -51,7 +51,7 @@ namespace SDLS
 
         private void Awake( /* Run by Unity on game start */ )
         {
-            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+            Logging.Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
             LoadConfig();
 
@@ -93,8 +93,8 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Error($"Exception in TrashAllJSON: {ex.Message}");
-                Error($"Stack trace: {ex.StackTrace}");
+                Logging.Error($"Exception in TrashAllJSON: {ex.Message}");
+                Logging.Error($"Stack trace: {ex.StackTrace}");
             }
             DebugTimer("TrashAllJSON");
         }
@@ -109,7 +109,7 @@ namespace SDLS
                 // still run them, and the user would have no clue why. 
                 DebugTimer("Cleanup");
                 RemoveDirectory("SDLS_MERGED");
-                foreach (string file in createdFiles) RemoveJSON(file);
+                foreach (string file in createdFiles) JSON.RemoveJSON(file);
                 DebugTimer("Cleanup");
             }
         }
@@ -155,7 +155,7 @@ namespace SDLS
                                 DebugTimer("Trash " + fullRelativePath);
 
                                 DebugTimer("Create " + fullRelativePath);
-                                CreateJSON(trashedJSON, fullRelativePath);
+                                JSON.CreateJSON(trashedJSON, fullRelativePath);
                                 // Safely add to createdFiles
                                 lock (createdFilesLock)
                                 {
@@ -166,7 +166,7 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                            Error($"Error processing file {filePath}: {ex.Message}");
+                            Logging.Error($"Error processing file {filePath}: {ex.Message}");
                         }
                         finally
                         {
@@ -215,7 +215,7 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
+                Logging.Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
                 return strObjJoined; // Return providedJSON as fallback
             }
         }
@@ -317,7 +317,7 @@ namespace SDLS
             {
                 if (JSONObj.ContainsKey(key))
                 {
-                    DLog("Chose " + key + " as a primary key");
+                    Logging.DLog("Chose " + key + " as a primary key");
                     return key;
                 }
             }
@@ -335,42 +335,12 @@ namespace SDLS
             return result;
         }
 
-        string GetParentPath(string filePath)
+        public string GetParentPath(string filePath)
         {
             int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
 
             // Return the substring from the start of the string up to the last directory separator
             return filePath.Substring(0, lastIndex + 1);
-        }
-
-        private void CreateJSON(string strObjJoined, string relativeWritePath)
-        {
-            string writePath = Path.Combine(persistentDataPath, relativeWritePath) + ".json";
-            string path = GetParentPath(writePath);
-
-            try
-            {
-                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-                File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
-                ? strObjJoined : // Output file as a single object
-                $"[{strObjJoined}]"); // Put file in an array
-
-                Log("Created new file at " + relativeWritePath);
-            }
-            catch (Exception ex)
-            {
-                Error("Error writing file: " + ex.Message);
-            }
-        }
-
-        private void RemoveJSON(string fullpath)
-        {
-            string filePath = fullpath + ".json";
-            if (File.Exists(filePath))
-            {
-                Warn("Removing " + fullpath);
-                File.Delete(filePath);
-            }
         }
 
         private void RemoveDirectory(string relativePath) // Removes any directory in addon
@@ -381,12 +351,12 @@ namespace SDLS
             try
             {
                 Directory.Delete(path, true);
-                Warn("Removing " + relativePathDirectory);
+                Logging.Warn("Removing " + relativePathDirectory);
             }
             catch (DirectoryNotFoundException) { }
             catch (Exception ex)
             {
-                Error($"Error deleting directory: {ex.Message}");
+                Logging.Error($"Error deleting directory: {ex.Message}");
             }
         }
 
@@ -401,8 +371,8 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
-                Error(ex.Message);
+                Logging.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
+                Logging.Error(ex.Message);
                 return "";
             }
         }
@@ -414,7 +384,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    Logging.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -502,7 +472,7 @@ namespace SDLS
             }
             else
             {
-                Warn("Config not found or corrupt, using default values.");
+                Logging.Warn("Config not found or corrupt, using default values.");
                 string file = ReadTextResource(GetEmbeddedPath() + CONFIG); // Get the default config from the embedded resources
 
                 lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
@@ -543,7 +513,7 @@ namespace SDLS
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer
-                Log(string.Format("Starting process {0}", name));
+                Logging.Log(string.Format("Starting process {0}", name));
                 stopwatch = new Stopwatch();
                 stopwatch.Start();
                 DebugTimers[name] = stopwatch;
@@ -551,7 +521,7 @@ namespace SDLS
             else if (stopwatch.IsRunning)
             { // Stop the timer and log the result
                 stopwatch.Stop();
-                Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
+                Logging.Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
             }
             else
             { // Removes the timer and starts it again
@@ -565,11 +535,11 @@ namespace SDLS
             if (logConflicts)
             {
                 string modToBlame = $"{currentModName} overwrote a value:";
-                Warn(modToBlame);
+                Logging.Warn(modToBlame);
                 conflictLog.Add(modToBlame);
 
                 string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'.\nOld value: {oldValue}\nNew value: {newValue}";
-                Warn(overwrittenValues);
+                Logging.Warn(overwrittenValues);
                 conflictLog.Add(overwrittenValues);
             }
         }
@@ -609,23 +579,7 @@ namespace SDLS
             "You merely adopted the JSON. I was born in it, molded by it.",
             };
 
-            Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
+            Logging.Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
         }
-
-        // Simplified log functions
-        public void Log(object message) { Logger.LogInfo(message); }
-        public void Warn(object message) { Logger.LogWarning(message); }
-        public void Error(object message) { Logger.LogError(message); }
-#if DEBUG
-        // Log functions that don't run when built in Release mode
-        public void DLog(object message) { Log(message); }
-        public void DWarn(object message) { Warn(message); }
-        public void DError(object message) { Error(message); }
-#else
-        // Empty overload methods to make sure the plugin doesn't crash when built in release mode
-        private void DLog(object message) { }
-        private void DWarn(object message) { }
-        private void DError(object message) { }
-#endif
     }
 }

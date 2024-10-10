@@ -72,7 +72,7 @@ namespace SDLS
 
                 muteCoroutine = StartCoroutine(ForceMuteCoroutine());
             }
-            else Plugin.Instance.Warn("No background music AudioSource found to mute.");
+            else Logging.Warn("No background music AudioSource found to mute.");
 
         }
 

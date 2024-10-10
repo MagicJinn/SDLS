@@ -121,6 +121,8 @@ namespace SDLS
 
             var resetEvents = new List<ManualResetEvent>(); // List to track all the async tasks
             const int batchSize = 60; // Slightly less than the maximum of 64 to be safe
+            var createdFilesLock = new object(); // Lock for createdFiles access
+
             // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
             // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
             // Subdirectories in addons (A list of all mods)
@@ -154,6 +156,11 @@ namespace SDLS
 
                                 DebugTimer("Create " + fullRelativePath);
                                 CreateJSON(trashedJSON, fullRelativePath);
+                                // Safely add to createdFiles
+                                lock (createdFilesLock)
+                                {
+                                    createdFiles.Add(fullRelativePath);
+                                }
                                 DebugTimer("Create " + fullRelativePath);
                             }
                         }
@@ -349,7 +356,6 @@ namespace SDLS
                 $"[{strObjJoined}]"); // Put file in an array
 
                 Log("Created new file at " + relativeWritePath);
-                createdFiles.Add(relativeWritePath);
             }
             catch (Exception ex)
             {

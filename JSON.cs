@@ -4,7 +4,6 @@ using JsonFx.Json;
 using System.Collections.Generic;
 using System.IO;
 
-
 namespace SDLS
 {
         public static class JSON
@@ -60,11 +59,11 @@ namespace SDLS
                                 ? strObjJoined : // Output file as a single object
                                 $"[{strObjJoined}]"); // Put file in an array
 
-                                Logging.Log("Created new file at " + relativeWritePath);
+                                Plugin.Instance.Log("Created new file at " + relativeWritePath);
                         }
                         catch (Exception ex)
                         {
-                                Logging.Error("Error writing file: " + ex.Message);
+                                Plugin.Instance.Error("Error writing file: " + ex.Message);
                         }
                 }
 
@@ -73,7 +72,7 @@ namespace SDLS
                         string filePath = fullpath + ".json";
                         if (File.Exists(filePath))
                         {
-                                Logging.Warn("Removing " + fullpath);
+                                Plugin.Instance.Warn("Removing " + fullpath);
                                 File.Delete(filePath);
                         }
                 }

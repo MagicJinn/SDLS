@@ -51,7 +51,7 @@ namespace SDLS
 
         private void Awake( /* Run by Unity on game start */ )
         {
-            Logging.Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
             LoadConfig();
 
@@ -93,8 +93,8 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Logging.Error($"Exception in TrashAllJSON: {ex.Message}");
-                Logging.Error($"Stack trace: {ex.StackTrace}");
+                Error($"Exception in TrashAllJSON: {ex.Message}");
+                Error($"Stack trace: {ex.StackTrace}");
             }
             DebugTimer("TrashAllJSON");
         }
@@ -166,7 +166,7 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                            Logging.Error($"Error processing file {filePath}: {ex.Message}");
+                            Error($"Error processing file {filePath}: {ex.Message}");
                         }
                         finally
                         {
@@ -215,7 +215,7 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Logging.Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
+                Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
                 return strObjJoined; // Return providedJSON as fallback
             }
         }
@@ -317,7 +317,7 @@ namespace SDLS
             {
                 if (JSONObj.ContainsKey(key))
                 {
-                    Logging.DLog("Chose " + key + " as a primary key");
+                    DLog("Chose " + key + " as a primary key");
                     return key;
                 }
             }
@@ -351,12 +351,12 @@ namespace SDLS
             try
             {
                 Directory.Delete(path, true);
-                Logging.Warn("Removing " + relativePathDirectory);
+                Warn("Removing " + relativePathDirectory);
             }
             catch (DirectoryNotFoundException) { }
             catch (Exception ex)
             {
-                Logging.Error($"Error deleting directory: {ex.Message}");
+                Error($"Error deleting directory: {ex.Message}");
             }
         }
 
@@ -371,8 +371,8 @@ namespace SDLS
             }
             catch (Exception ex)
             {
-                Logging.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
-                Logging.Error(ex.Message);
+                Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
+                Error(ex.Message);
                 return "";
             }
         }
@@ -384,7 +384,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    Logging.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -472,7 +472,7 @@ namespace SDLS
             }
             else
             {
-                Logging.Warn("Config not found or corrupt, using default values.");
+                Warn("Config not found or corrupt, using default values.");
                 string file = ReadTextResource(GetEmbeddedPath() + CONFIG); // Get the default config from the embedded resources
 
                 lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
@@ -513,7 +513,7 @@ namespace SDLS
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer
-                Logging.Log(string.Format("Starting process {0}", name));
+                Log(string.Format("Starting process {0}", name));
                 stopwatch = new Stopwatch();
                 stopwatch.Start();
                 DebugTimers[name] = stopwatch;
@@ -521,7 +521,7 @@ namespace SDLS
             else if (stopwatch.IsRunning)
             { // Stop the timer and log the result
                 stopwatch.Stop();
-                Logging.Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
+                Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
             }
             else
             { // Removes the timer and starts it again
@@ -535,11 +535,11 @@ namespace SDLS
             if (logConflicts)
             {
                 string modToBlame = $"{currentModName} overwrote a value:";
-                Logging.Warn(modToBlame);
+                Warn(modToBlame);
                 conflictLog.Add(modToBlame);
 
                 string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'.\nOld value: {oldValue}\nNew value: {newValue}";
-                Logging.Warn(overwrittenValues);
+                Warn(overwrittenValues);
                 conflictLog.Add(overwrittenValues);
             }
         }
@@ -579,7 +579,23 @@ namespace SDLS
             "You merely adopted the JSON. I was born in it, molded by it.",
             };
 
-            Logging.Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
+            Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
         }
+
+        // Simplified log functions
+        public void Log(object message) { Logger.LogInfo(message); }
+        public void Warn(object message) { Console.WriteLine(message); }
+        public void Error(object message) { Console.WriteLine(message); }
+#if DEBUG
+        // Log functions that don't run when built in Release mode
+        public void DLog(object message) { Log(message); }
+        public void DWarn(object message) { Warn(message); }
+        public void DError(object message) { Error(message); }
+#else
+        // Empty overload methods to make sure the plugin doesn't crash when built in release mode
+        private  void DLog(object message) { }
+        private  void DWarn(object message) { }
+        private  void DError(object message) { }
+#endif
     }
 }

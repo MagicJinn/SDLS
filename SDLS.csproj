@@ -1,54 +1,40 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-<PropertyGroup>
-    <!-- Default settings -->
+  <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
     <AssemblyName>SDLS</AssemblyName>
     <Description>Simplified Json Data Loading to remove the need for unused fields, leading to 30%-70% less code.</Description>
-    <Version>1.0.1</Version>
+    <Version>1.5.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-</PropertyGroup>
-
-<PropertyGroup Condition="'$(DefineConstants.Contains(`SKIES`))'">
-    <!-- Changes the TargetFramework when run in SKIES mode -->
-    <TargetFramework>net48</TargetFramework>
-</PropertyGroup>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
-    <PackageReference Include="BepInEx.Core" Version="5.*" />
-    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
-    <PackageReference Include="UnityEngine.Modules" Version="5.5.1" IncludeAssets="compile" />
+    <PackageReference Include="BepInEx.Core" Version="5.*">
+    </PackageReference>
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*">
+    </PackageReference>
+    <PackageReference Include="UnityEngine.Modules" Version="5.5.1" IncludeAssets="compile">
+    </PackageReference>
   </ItemGroup>
 
-  <PropertyGroup>
-  <!-- Supress warning Newtonsoft and other DLL's might generate when they are not compatible with the current TargetFramework -->
-  <NoWarn>$(NoWarn);MSB3258</NoWarn>
-</PropertyGroup>
-
-  
-<ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
     <Reference Include="Sunless.Game">
-        <HintPath>dependencies/Sunless.Game.dll</HintPath>
+      <HintPath>dependencies/Sunless.Game.dll</HintPath>
+      <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
     <Reference Include="JsonFx">
-        <HintPath>dependencies/JsonFX.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-        <HintPath>dependencies/Newtonsoft.Json.dll</HintPath>
+      <HintPath>dependencies/JsonFX.dll</HintPath>
+      <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
 
     <!-- Include the default settings ini file as fallback -->
     <EmbeddedResource Include="SDLS_Config.ini" />
 
-    <!-- Include all JSON files in all subdirectories of Sunless Sea -->
-    <EmbeddedResource Include="Sunless Sea/**/*.json" />
-
-    <!-- Include all JSON files in all subdirectories of Sunless Skies -->
-    <EmbeddedResource Include="Sunless Skies/**/*.json" />
-</ItemGroup>
-
+    <!-- Include all JSON files -->
+    <EmbeddedResource Include="default/*.json" />
+  </ItemGroup>
 
 </Project>

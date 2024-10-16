@@ -26,7 +26,7 @@
       <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
     <Reference Include="JsonFx">
-      <HintPath>dependencies/JsonFX.dll</HintPath>
+      <HintPath>dependencies/JsonFx.dll</HintPath>
       <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
 

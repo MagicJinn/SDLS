@@ -3,6 +3,7 @@ using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
 using System.IO;
+using Swifter.Json;
 
 namespace SDLS
 {
@@ -10,6 +11,7 @@ namespace SDLS
         {
                 private static readonly JsonReader JSONReader = new JsonReader();
                 private static readonly JsonWriter JSONWriter = new JsonWriter();
+                private static readonly JsonFormatter jsonFormatterSwift = new JsonFormatter();
 
                 public static string ReadGameJson(string fullFilePath)
                 {
@@ -31,7 +33,7 @@ namespace SDLS
 
                 public static Dictionary<string, object> Deserialize(string strObj)
                 {
-                        var deserializedData = JSONReader.Read<Dictionary<string, object>>(strObj);
+                        var deserializedData = jsonFormatterSwift.Deserialize<Dictionary<string, object>>(strObj);
                         return deserializedData;
                 }
 

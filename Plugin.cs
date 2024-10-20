@@ -133,12 +133,16 @@ namespace SDLS
                     var resetEvent = new ManualResetEvent(false);
                     resetEvents.Add(resetEvent);
 
+                    // Capture the loop variables explicitly
+                    string modFolderCapture = modFolder;
+                    string filePathCapture = filePath;
+
                     ThreadPool.QueueUserWorkItem(state =>
                     {
                         try
                         {
-                            string modFolderInAddon = Path.Combine("addon", modFolder);
-                            string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
+                            string modFolderInAddon = Path.Combine("addon", modFolderCapture);
+                            string fullRelativePath = Path.Combine(modFolderInAddon, filePathCapture);
 
                             string fileContent = JSON.ReadGameJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
                             if (fileContent == null) fileContent = JSON.ReadGameJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
@@ -156,6 +160,7 @@ namespace SDLS
 
                                 DebugTimer("Create " + fullRelativePath);
                                 JSON.CreateJSON(trashedJSON, fullRelativePath);
+
                                 // Safely add to createdFiles
                                 lock (createdFilesLock)
                                 {
@@ -166,14 +171,17 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                            Error($"Error processing file {filePath}: {ex.Message}");
+                            Error($"Error processing file {filePathCapture}: {ex.Message}\nStack Trace: {ex.StackTrace}");
+                            if (ex.InnerException != null)
+                            {
+                                Error($"Inner Exception: {ex.InnerException.Message}\nInner Stack Trace: {ex.InnerException.StackTrace}");
+                            }
                         }
                         finally
                         {
                             resetEvent.Set();
                         }
                     });
-
                     // If we've queued up a batch, wait for it to complete
                     if (resetEvents.Count >= batchSize)
                     {
@@ -187,6 +195,7 @@ namespace SDLS
             {
                 WaitHandle.WaitAll(resetEvents.ToArray());
             }
+
         }
 
         private string TrashJSON(string strObjJoined, string name)

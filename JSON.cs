@@ -3,15 +3,16 @@ using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
 using System.IO;
-using Swifter.Json;
+// using Swifter.Json;
+using Newtonsoft.Json;
 
 namespace SDLS
 {
         public static class JSON
         {
-                private static readonly JsonReader JSONReader = new JsonReader();
-                private static readonly JsonWriter JSONWriter = new JsonWriter();
-                private static readonly JsonFormatter jsonFormatterSwift = new JsonFormatter();
+                // private static readonly JsonReader JSONReader = new JsonReader();
+                // private static readonly Json JSONWriter = new();
+                // public static JsonFormatter jsonFormatterSwift;
 
                 public static string ReadGameJson(string fullFilePath)
                 {
@@ -27,13 +28,13 @@ namespace SDLS
 
                 public static string Serialize(object obj)
                 {
-                        string serializedData = JSONWriter.Write(obj);
+                        string serializedData = JsonConvert.SerializeObject(obj);
                         return serializedData;
                 }
 
                 public static Dictionary<string, object> Deserialize(string strObj)
                 {
-                        var deserializedData = jsonFormatterSwift.Deserialize<Dictionary<string, object>>(strObj);
+                        var deserializedData = JsonConvert.DeserializeObject<Dictionary<string, object>>(strObj);
                         return deserializedData;
                 }
 
@@ -56,6 +57,8 @@ namespace SDLS
 
                         try
                         {
+                                Plugin.Instance.Log("Path " + path);
+                                Plugin.Instance.Log("WritePath " + writePath);
                                 if (!Directory.Exists(path)) Directory.CreateDirectory(path);
                                 File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
                                 ? strObjJoined : // Output file as a single object

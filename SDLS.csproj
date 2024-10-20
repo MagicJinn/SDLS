@@ -29,13 +29,11 @@
       <HintPath>dependencies/JsonFx.dll</HintPath>
       <Private>false</Private> <!-- Prevent this dependency from being copied -->
     </Reference>
-    <Reference Include="Swifter Json">
-      <HintPath>dependencies/Swifter.Json.dll</HintPath>
-      <Private>false</Private> <!-- Prevent this dependency from being copied -->
+    <Reference Include="Newtonsoft">
+    <HintPath>dependencies/Newtonsoft.Json.dll</HintPath>
     </Reference>
-        <Reference Include="Swifter Core">
-      <HintPath>dependencies/Swifter.Core.dll</HintPath>
-      <Private>false</Private> <!-- Prevent this dependency from being copied -->
+       <Reference Include="System.Runtime.Serialization">
+    <HintPath>dependencies/System.Runtime.Serialization.dll</HintPath>
     </Reference>
 
     <!-- Include the default settings ini file as fallback -->

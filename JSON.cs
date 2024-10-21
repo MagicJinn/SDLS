@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 // using Swifter.Json;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace SDLS
 {
@@ -57,8 +58,8 @@ namespace SDLS
 
                         try
                         {
-                                Plugin.Instance.Log("Path " + path);
-                                Plugin.Instance.Log("WritePath " + writePath);
+                                Plugin.Instance.DLog("Path " + path);
+                                Plugin.Instance.DLog("WritePath " + writePath);
                                 if (!Directory.Exists(path)) Directory.CreateDirectory(path);
                                 File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
                                 ? strObjJoined : // Output file as a single object

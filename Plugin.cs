@@ -198,6 +198,7 @@ namespace SDLS
 
         }
 
+
         private string TrashJSON(string strObjJoined, string name)
         {
             try
@@ -208,14 +209,26 @@ namespace SDLS
                 foreach (string splitString in JSON.SplitJSON(strObjJoined))
                 {
                     var deserializedJSON = JSON.Deserialize(splitString);
+                    try
+                    {
+                        // Apply each field found in the deserialized JSON to the mold data recursively
+                        var returnData = ApplyFieldsToMold(deserializedJSON, embeddedData);
 
-                    // Apply each field found in the deserialized JSON to the mold data recursively
-                    var returnData = ApplyFieldsToMold(deserializedJSON, embeddedData);
-
-                    // Serialize the updated mold data back to JSON string
-                    strObjList.Add(JSON.Serialize(returnData));
-
+                        // Serialize the updated mold data back to JSON string
+                        strObjList.Add(JSON.Serialize(returnData));
+                    }
+                    catch (KeyNotFoundException keyEx)
+                    {
+                        Error($"Key not found error while processing JSON for '{name}': Missing key: '{keyEx.Message}'");
+                        Error($"Failed JSON string: {splitString}");
+                    }
+                    catch (Exception innerEx)
+                    {
+                        Error($"Unexpected error while processing JSON for '{name}': {innerEx.Message}");
+                        Error($"Failed JSON string: {splitString}");
+                    }
                 }
+
                 TilesSpecialCase = false;  // Stupid special case for Tiles, check GetAComponent for details
 
                 // Join the processed JSON strings together
@@ -225,9 +238,10 @@ namespace SDLS
             catch (Exception ex)
             {
                 Error($"Error occurred while processing JSON for '{name}': {ex.Message}");
-                return strObjJoined; // Return providedJSON as fallback
+                return strObjJoined; // Return provided JSON as fallback
             }
         }
+
 
         private Dictionary<string, object> ApplyFieldsToMold(
             Dictionary<string, object> tracedJSONObj, // This data will get copied over

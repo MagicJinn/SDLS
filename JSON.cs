@@ -3,6 +3,7 @@ using System.Text;
 using JsonFx.Json;
 using System.Collections.Generic;
 using System.IO;
+using UnityEngine;
 
 namespace SDLS
 {
@@ -49,8 +50,8 @@ namespace SDLS
 
                 public static void CreateJSON(string strObjJoined, string relativeWritePath)
                 {
-                        string writePath = Path.Combine(Plugin.Instance.persistentDataPath, relativeWritePath) + ".json";
-                        string path = Plugin.Instance.GetParentPath(writePath);
+                        string writePath = Path.Combine(Plugin.persistentDataPath, relativeWritePath) + ".json";
+                        string path = Plugin.GetParentPath(writePath);
 
                         try
                         {
@@ -59,11 +60,11 @@ namespace SDLS
                                 ? strObjJoined : // Output file as a single object
                                 $"[{strObjJoined}]"); // Put file in an array
 
-                                Plugin.Instance.Log("Created new file at " + relativeWritePath);
                         }
                         catch (Exception ex)
                         {
-                                Plugin.Instance.Error("Error writing file: " + ex.Message);
+                                Debug.LogError(" writing file: " + ex.Message);
+                                Debug.LogError("Because of limitations these logs will never show up. Great.");
                         }
                 }
 
@@ -72,7 +73,7 @@ namespace SDLS
                         string filePath = fullpath + ".json";
                         if (File.Exists(filePath))
                         {
-                                Plugin.Instance.Warn("Removing " + fullpath);
+                                Debug.LogWarning("Removing " + fullpath);
                                 File.Delete(filePath);
                         }
                 }

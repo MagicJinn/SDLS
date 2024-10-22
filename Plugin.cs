@@ -23,7 +23,7 @@ namespace SDLS
         private bool fastLoad = true;
         // Config options end
 
-        public readonly string persistentDataPath = Application.persistentDataPath;
+        public static readonly string persistentDataPath = Application.persistentDataPath;
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
         private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
@@ -119,21 +119,10 @@ namespace SDLS
             string[] filePaths = JSON.GetFilePaths(); // List of all possible moddable files
             componentNames = FindComponents(); // list of each default component
 
-            var resetEvents = new List<ManualResetEvent>(); // List to track all the async tasks
-            const int batchSize = 60; // Slightly less than the maximum of 64 to be safe
-            var createdFilesLock = new object(); // Lock for createdFiles access
-
-            // Iterate over each subdirectory returned by FileHelper.GetAllSubDirectories()
-            // FileHelper.GetAllSubDirectories() is a function provided by the game to list all
-            // Subdirectories in addons (A list of all mods)
             foreach (string modFolder in Directory.GetDirectories(Path.Combine(persistentDataPath, "addon")))
             {
                 foreach (string filePath in filePaths)
                 {
-                    var resetEvent = new ManualResetEvent(false);
-                    resetEvents.Add(resetEvent);
-
-                    ThreadPool.QueueUserWorkItem(state =>
                     {
                         try
                         {
@@ -156,11 +145,8 @@ namespace SDLS
 
                                 DebugTimer("Create " + fullRelativePath);
                                 JSON.CreateJSON(trashedJSON, fullRelativePath);
-                                // Safely add to createdFiles
-                                lock (createdFilesLock)
-                                {
-                                    createdFiles.Add(fullRelativePath);
-                                }
+
+                                createdFiles.Add(fullRelativePath);
                                 DebugTimer("Create " + fullRelativePath);
                             }
                         }
@@ -168,24 +154,8 @@ namespace SDLS
                         {
                             Error($"Error processing file {filePath}: {ex.Message}");
                         }
-                        finally
-                        {
-                            resetEvent.Set();
-                        }
-                    });
-
-                    // If we've queued up a batch, wait for it to complete
-                    if (resetEvents.Count >= batchSize)
-                    {
-                        WaitHandle.WaitAll(resetEvents.ToArray());
-                        resetEvents.Clear();
-                    }
+                    };
                 }
-            }
-            // Wait for any remaining handles
-            if (resetEvents.Count > 0)
-            {
-                WaitHandle.WaitAll(resetEvents.ToArray());
             }
         }
 
@@ -335,7 +305,7 @@ namespace SDLS
             return result;
         }
 
-        public string GetParentPath(string filePath)
+        public static string GetParentPath(string filePath)
         {
             int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
 

@@ -57,7 +57,7 @@ namespace SDLS
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
             ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async
-            if (fastLoad) FastLoadInitialization(jsonCompletedEvent);
+            if (fastLoad) FastLoadInitialization();
         }
 
         private void JsonInitialization(ManualResetEvent jsonCompletedEvent)
@@ -81,13 +81,12 @@ namespace SDLS
             jsonCompletedEvent.Set();
         }
 
-        private void FastLoadInitialization(ManualResetEvent jsonCompletedEvent)
+        private void FastLoadInitialization()
         {
             // Create a new GameObject and attach FastLoad to it
             GameObject fastLoadObject = new GameObject("FastLoad");
             DontDestroyOnLoad(fastLoadObject);
             fastLoader = fastLoadObject.AddComponent<FastLoad>();
-            fastLoader.Initialize(jsonCompletedEvent);
 
             StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
         }

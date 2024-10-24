@@ -19,20 +19,17 @@ namespace SDLS
         private Coroutine muteCoroutine;
 
         public bool isInitializationComplete = false; // Track whether regular SDLS initialization is complete
-        private ManualResetEvent initializationCompletedEvent; // Event to signal when SDLS initialization is complete
         private bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
         List<Canvas> disabledCanvases = new();
 
-        public void Initialize(ManualResetEvent initEvent)
+        public void Awake()
         {
-            initializationCompletedEvent = initEvent;
-
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
         public IEnumerator WaitForInitAndStartRepositoryManager()
         {
-            yield return new WaitUntil(() => initializationCompletedEvent.WaitOne(0));
+            yield return new WaitUntil(() => isInitializationComplete);
             ThreadPool.QueueUserWorkItem(_ => InitializeRepositoryManager());
         }
 

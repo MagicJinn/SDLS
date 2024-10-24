@@ -52,37 +52,15 @@ namespace SDLS
         private void Awake( /* Run by Unity on game start */ )
         {
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-
+            Instance = this;
             LoadConfig();
 
-            // Pass initializationCompletedEvent into InitializationProcess to track the event without making it global
-            var initializationCompletedEvent = new ManualResetEvent(false);
-            // Start SDLS main initialization process
-            ThreadPool.QueueUserWorkItem(state => InitializationProcess(initializationCompletedEvent));
-
-            if (fastLoad)
-            {
-                Instance = this;
-
-                // Create a new GameObject and attach FastLoad to it
-                GameObject fastLoadObject = new GameObject("FastLoad");
-                DontDestroyOnLoad(fastLoadObject);
-                fastLoader = fastLoadObject.AddComponent<FastLoad>();
-                fastLoader.Initialize(initializationCompletedEvent);
-
-                StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
-            }
+            var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
+            ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async
+            if (fastLoad) FastLoadInitialization(jsonCompletedEvent);
         }
 
-        private void InitializationProcess(ManualResetEvent initializationCompletedEvent)
-        {
-            Initialization();
-            // Signal that initialization is complete
-            fastLoader.isInitializationComplete = true;
-            initializationCompletedEvent.Set();
-        }
-
-        private void Initialization()
+        private void JsonInitialization(ManualResetEvent jsonCompletedEvent)
         {
             InitializationLine();
 
@@ -97,6 +75,21 @@ namespace SDLS
                 Error($"Stack trace: {ex.StackTrace}");
             }
             DebugTimer("TrashAllJSON");
+
+            // Signal that initialization is complete
+            fastLoader.isInitializationComplete = true;
+            jsonCompletedEvent.Set();
+        }
+
+        private void FastLoadInitialization(ManualResetEvent jsonCompletedEvent)
+        {
+            // Create a new GameObject and attach FastLoad to it
+            GameObject fastLoadObject = new GameObject("FastLoad");
+            DontDestroyOnLoad(fastLoadObject);
+            fastLoader = fastLoadObject.AddComponent<FastLoad>();
+            fastLoader.Initialize(jsonCompletedEvent);
+
+            StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
         }
 
         void OnApplicationQuit( /* Run by Unity on game exit */ )

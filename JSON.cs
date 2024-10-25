@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace SDLS
 {
-        public static class JSON
+        internal static class JSON
         {
                 private static readonly JsonReader JSONReader = new JsonReader();
                 private static readonly JsonWriter JSONWriter = new JsonWriter();
@@ -22,6 +22,23 @@ namespace SDLS
                          str.Substring(1, str.Length - 2) :
                          str) : // Return the string if the file isn't in an array
                          null; // Return null if the file is empty
+                }
+
+                public static string ReadInternalJson(string resourceName) // Method for loading embedded JSON resources
+                {
+                        try
+                        {
+                                string name = Plugin.GetLastWord(resourceName);
+                                string fullPath = Plugin.GetEmbeddedPath("default");
+                                string fullResourceName = $"{fullPath}.{name}.json"; // Construct the full resource name
+                                return Plugin.ReadTextResource(fullResourceName);
+                        }
+                        catch (Exception ex)
+                        {
+                                Plugin.Instance.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
+                                Plugin.Instance.Error(ex.Message);
+                                return "";
+                        }
                 }
 
                 public static string Serialize(object obj)
@@ -50,7 +67,7 @@ namespace SDLS
 
                 public static void CreateJSON(string strObjJoined, string relativeWritePath)
                 {
-                        string writePath = Path.Combine(Plugin.persistentDataPath, relativeWritePath) + ".json";
+                        string writePath = Path.Combine(Plugin.PersistentDataPath, relativeWritePath) + ".json";
                         string path = Plugin.GetParentPath(writePath);
 
                         try
@@ -63,8 +80,7 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                                Debug.LogError(" writing file: " + ex.Message);
-                                Debug.LogError("Because of limitations these logs will never show up. Great.");
+                                Plugin.Instance.Error("Error writing file: " + ex.Message);
                         }
                 }
 
@@ -73,7 +89,7 @@ namespace SDLS
                         string filePath = fullpath + ".json";
                         if (File.Exists(filePath))
                         {
-                                Debug.LogWarning("Removing " + fullpath);
+                                Plugin.Instance.Warn("Removing " + fullpath);
                                 File.Delete(filePath);
                         }
                 }

@@ -7,11 +7,12 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
+using System.Drawing.Text;
 
 namespace SDLS
 {
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
-    public class Plugin : BaseUnityPlugin
+    internal sealed class Plugin : BaseUnityPlugin
     {
         // Config options
         private const string CONFIG = "SDLS_Config.ini";
@@ -19,11 +20,12 @@ namespace SDLS
         private bool logConflicts = true;
         private bool basegameMerge = true;
         private bool doCleanup = true; // Whether the files created by SDLS should be cleared during shutdown
-        private bool logDebugTimers = true;
+        private bool logDebugTimers = false;
         private bool fastLoad = true;
         // Config options end
 
-        public static readonly string persistentDataPath = Application.persistentDataPath;
+        public static string PersistentDataPath { get; } = Application.persistentDataPath;
+        private static Assembly Assembly { get; } = Assembly.GetExecutingAssembly();
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
         private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
@@ -111,7 +113,7 @@ namespace SDLS
             string[] filePaths = JSON.GetFilePaths(); // List of all possible moddable files
             componentNames = FindComponents(); // list of each default component
 
-            foreach (string modFolder in Directory.GetDirectories(Path.Combine(persistentDataPath, "addon")))
+            foreach (string modFolder in Directory.GetDirectories(Path.Combine(PersistentDataPath, "addon")))
             {
                 foreach (string filePath in filePaths)
                 {
@@ -288,7 +290,7 @@ namespace SDLS
         }
 
 
-        private string GetLastWord(string str)
+        public static string GetLastWord(string str)
         {
             if (str.IndexOfAny(new char[] { '/', '\\' }) == -1) return str; // No separators found, return the original string
 
@@ -308,7 +310,7 @@ namespace SDLS
         private void RemoveDirectory(string relativePath) // Removes any directory in addon
         {
             string relativePathDirectory = Path.Combine("addon", relativePath);
-            string path = Path.Combine(persistentDataPath, relativePathDirectory);
+            string path = Path.Combine(PersistentDataPath, relativePathDirectory);
 
             try
             {
@@ -319,39 +321,6 @@ namespace SDLS
             catch (Exception ex)
             {
                 Error($"Error deleting directory: {ex.Message}");
-            }
-        }
-
-        private string JSONAsText(string resourceName) // Method for loading embedded JSON resources
-        {
-            try
-            {
-                string name = GetLastWord(resourceName);
-                string fullPath = GetEmbeddedPath("default");
-                string fullResourceName = $"{fullPath}.{name}.json"; // Construct the full resource name
-                return ReadTextResource(fullResourceName);
-            }
-            catch (Exception ex)
-            {
-                Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
-                Error(ex.Message);
-                return "";
-            }
-        }
-
-        private string ReadTextResource(string fullResourceName)
-        {
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream(fullResourceName))
-            {
-                if (stream == null)
-                {
-                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
-                    return null; // Return null if the embedded resource doesn't exist
-                }
-
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd(); // Read and return the embedded resource
             }
         }
 
@@ -381,7 +350,7 @@ namespace SDLS
             string componentName = name;
             if (!componentCache.ContainsKey(componentName))
             {
-                string asText = JSONAsText(componentName);
+                string asText = JSON.ReadInternalJson(componentName);
 
                 string referenceString = "REFERENCE=";
                 string strippedAsText = asText.Replace(" ", "");
@@ -409,7 +378,7 @@ namespace SDLS
                     componentName = "TilesTiles"; // Set the name to TilesTiles to return the correct component
                     if (!componentCache.ContainsKey("TilesTiles")) // If the TilesTiles component hasn't been added, add it.
                     {
-                        componentCache[componentName] = JSON.Deserialize(JSONAsText(componentName));
+                        componentCache[componentName] = JSON.Deserialize(JSON.ReadInternalJson(componentName));
                     }
                 }
             }
@@ -418,7 +387,7 @@ namespace SDLS
             return componentCache[componentName];
         }
 
-        private string GetEmbeddedPath(string folderName = "") // Get the path of embedded resources
+        public static string GetEmbeddedPath(string folderName = "") // Get the path of embedded resources
         {
             string projectName = Assembly.GetExecutingAssembly().GetName().Name;
             string fullPath = $"{projectName}.{folderName}";
@@ -466,6 +435,21 @@ namespace SDLS
             catch (Exception)
             {
                 LoadConfig( /*loadDefault =*/ true); // Load config with default values
+            }
+        }
+
+        public static string ReadTextResource(string fullResourceName)
+        {
+            using (Stream stream = Assembly.GetManifestResourceStream(fullResourceName))
+            {
+                if (stream == null)
+                {
+                    Instance.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    return null; // Return null if the embedded resource doesn't exist
+                }
+
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd(); // Read and return the embedded resource
             }
         }
 

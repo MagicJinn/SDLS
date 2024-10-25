@@ -5,10 +5,11 @@ using System.Threading;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace SDLS
 {
-    public class FastLoad : MonoBehaviour
+    internal sealed class FastLoad : MonoBehaviour
     {
         private const float FadeDuration = 2.0f; // Fade duration in seconds
         private const string TransitionPanelName = "TransitionPanel";
@@ -36,7 +37,14 @@ namespace SDLS
         private void InitializeRepositoryManager()
         {
             Plugin.Instance.DebugTimer("FastLoad");
-            RepositoryManager.Instance.Initialise();
+            try
+            {
+                RepositoryManager.Instance.Initialise();
+            }
+            catch (Exception ex)
+            {
+                Plugin.Instance.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message);
+            }
             isRepositoryManagerInitComplete = true;
             Plugin.Instance.DebugTimer("FastLoad");
         }
@@ -123,7 +131,8 @@ namespace SDLS
         {
             if (canvasGroup == null || !canvasGroup.gameObject.activeInHierarchy) yield break; // Exit if canvasGroup is null or inactive
 
-            float elapsedTime = 0f; while (elapsedTime < FadeDuration && canvasGroup != null && canvasGroup.gameObject.activeInHierarchy)
+            float elapsedTime = 0f;
+            while (elapsedTime < FadeDuration && canvasGroup != null && canvasGroup.gameObject.activeInHierarchy)
             {
                 elapsedTime += Time.deltaTime;
                 canvasGroup.alpha = Mathf.Clamp01(elapsedTime / FadeDuration);

@@ -15,7 +15,7 @@
     "ShowAsMessage": false,
     "LivingStory": null,
     "LinkToEvent": null,
-    "Deck": null,
+    "Deck": {},
     "Category": "Unspecialised",
     "LimitedToArea": null,
     "World": null,

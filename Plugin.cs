@@ -15,13 +15,8 @@ namespace SDLS
     internal sealed class Plugin : BaseUnityPlugin
     {
         // Config options
-        private const string CONFIG = "SDLS_Config.ini";
-        private bool doMerge = true;
-        private bool logConflicts = true;
-        private bool basegameMerge = true;
-        private bool doCleanup = true; // Whether the files created by SDLS should be cleared during shutdown
-        private bool logDebugTimers = false;
-        private bool fastLoad = true;
+        private const string CONFIG_FILENAME = "SDLS_Config.ini";
+        private Dictionary<string, bool> ConfigOptions = new(); // Gets filled in by LoadConfig
         // Config options end
 
         public static string PersistentDataPath { get; } = Application.persistentDataPath;
@@ -39,36 +34,40 @@ namespace SDLS
         private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new();
         // Dictionary structure breakdown:
         // - string: Represents the filename or category (eg events.json).
-        // - Dictionary<int, Dictionary<string, object>>: 
-        //    - int: Id of an entry, either Id or Name or AssociatedQualityId.
-        //    - Dictionary<string, object>: The actual data from a JSON object.
-        //       - string: The key from the JSON object.
-        //       - object: The value, which can be a primitive value or a nested object.
+        //    - Dictionary<int, Dictionary<string, object>>: 
+        //       - int: Id of an entry, either Id or Name or AssociatedQualityId.
+        //       - Dictionary<string, object>: The actual data from a JSON object.
+        //          - string: The key from the JSON object.
+        //          - object: The value, which can be a primitive value or a nested object.
 
 
         // Tracks every file SDLS creates. Used during cleanup
         private List<string> createdFiles = new();
-        public static Plugin Instance { get; private set; }
+        public static Plugin I { get; private set; }
+        public static bool jsonInitializationComplete = false;
         private FastLoad fastLoader;
+        private LoadIntoSave saveLoader;
 
         private void Awake( /* Run by Unity on game start */ )
         {
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-            Instance = this;
+            I = this;
             LoadConfig();
+            InitializationLine();
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
             ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async
-            if (fastLoad) FastLoadInitialization();
+            if (ConfigOptions["fastLoad"]) FastLoadInitialization();
+            if (ConfigOptions["loadIntoSave"]) LoadIntoSaveInitialization();
         }
+
+
 
         private void JsonInitialization(ManualResetEvent jsonCompletedEvent)
         {
-            InitializationLine();
-
-            DebugTimer("TrashAllJSON");
             try
             {
+                DebugTimer("TrashAllJSON");
                 TrashAllJSON();
             }
             catch (Exception ex)
@@ -76,26 +75,38 @@ namespace SDLS
                 Error($"Exception in TrashAllJSON: {ex.Message}");
                 Error($"Stack trace: {ex.StackTrace}");
             }
-            DebugTimer("TrashAllJSON");
-
-            // Signal that initialization is complete
-            fastLoader.isInitializationComplete = true;
-            jsonCompletedEvent.Set();
+            finally
+            {
+                DebugTimer("TrashAllJSON");
+                // Signal that initialization is complete
+                jsonInitializationComplete = true;
+                jsonCompletedEvent.Set();
+            }
         }
 
         private void FastLoadInitialization()
         {
             // Create a new GameObject and attach FastLoad to it
-            GameObject fastLoadObject = new GameObject("FastLoad");
+            var fastLoadObject = new GameObject("FastLoad");
             DontDestroyOnLoad(fastLoadObject);
             fastLoader = fastLoadObject.AddComponent<FastLoad>();
 
             StartCoroutine(fastLoader.WaitForInitAndStartRepositoryManager());
         }
 
+
+        private void LoadIntoSaveInitialization()
+        {
+            var loadIntoSaveObject = new GameObject("loadIntoSave");
+            DontDestroyOnLoad(loadIntoSaveObject);
+            saveLoader = loadIntoSaveObject.AddComponent<LoadIntoSave>();
+
+            StartCoroutine(saveLoader.LoadIntoSaveCoroutine(fastLoader));
+        }
+
         void OnApplicationQuit( /* Run by Unity on game exit */ )
         {
-            if (doCleanup)
+            if (ConfigOptions["doCleanup"])
             {
                 // Removes all files created by SDLS before closing, because otherwise they would cause problems with Vortex
                 // So basically, if a user had SDLS installed, and used Vortex to manage their mods, if they wanted to remove
@@ -397,14 +408,14 @@ namespace SDLS
         private void LoadConfig(bool loadDefault = false)
         {
             string[] lines;
-            if (File.Exists(CONFIG) && !loadDefault)
+            if (File.Exists(CONFIG_FILENAME) && !loadDefault)
             {
-                lines = File.ReadAllLines(CONFIG);
+                lines = File.ReadAllLines(CONFIG_FILENAME);
             }
             else
             {
                 Warn("Config not found or corrupt, using default values.");
-                string file = ReadTextResource(GetEmbeddedPath() + CONFIG); // Get the default config from the embedded resources
+                string file = ReadTextResource(GetEmbeddedPath() + CONFIG_FILENAME); // Get the default config from the embedded resources
 
                 lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
             }
@@ -422,15 +433,22 @@ namespace SDLS
                     }
                 }
 
-                doMerge = bool.Parse(optionsDict["domerge"]);
-                logConflicts = doMerge ? bool.Parse(optionsDict["logmergeconflicts"]) : false;
-                basegameMerge = doMerge ? bool.Parse(optionsDict["basegamemerge"]) : false;
+                ConfigOptions["doMerge"] = bool.Parse(optionsDict["domerge"]);
+                ConfigOptions["logConflicts"] = ConfigOptions["doMerge"] ? bool.Parse(optionsDict["logmergeconflicts"]) : false;
+                ConfigOptions["basegamemerge"] = ConfigOptions["doMerge"] ? bool.Parse(optionsDict["basegamemerge"]) : false;
 
-                doCleanup = bool.Parse(optionsDict["docleanup"]);
+                // Prevents issues with mod managers by removing all SDLS-created files on exit
+                ConfigOptions["doCleanup"] = bool.Parse(optionsDict["docleanup"]);
 
-                logDebugTimers = bool.Parse(optionsDict["logdebugtimers"]);
+                // Preloads game data asynchronously, significantly reducing save loading times.
+                // Seemingly causes crashes in the Steam version
+                ConfigOptions["fastLoad"] = bool.Parse(optionsDict["fastload"]);
 
-                fastLoad = bool.Parse(optionsDict["fastload"]);
+                // Whether to load into a save immediately when launching the game
+                ConfigOptions["loadIntoSave"] = bool.Parse(optionsDict["loadintosave"]);
+
+                // Log the time it takes to complete certain actions in the log
+                ConfigOptions["logDebugTimers"] = bool.Parse(optionsDict["logdebugtimers"]);
             }
             catch (Exception)
             {
@@ -444,7 +462,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    Instance.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    I.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -455,7 +473,7 @@ namespace SDLS
 
         public void DebugTimer(string name)
         {
-            if (!logDebugTimers) return;
+            if (!ConfigOptions["logDebugTimers"]) return;
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer

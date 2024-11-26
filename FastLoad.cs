@@ -9,101 +9,21 @@ using System;
 
 namespace SDLS
 {
-    internal sealed class FastLoad : MonoBehaviour
+    internal sealed class SDLSUIAndSceneManager : MonoBehaviour
     {
-        private const float FadeDuration = 2.0f; // Fade duration in seconds
+        public static SDLSUIAndSceneManager I = new();
+
         private const string TransitionPanelName = "TransitionPanel";
+        private const float FadeDuration = 1.5f; // Fade duration in seconds
+        List<Canvas> disabledCanvases = new();
 
         // Variables related to muting the background music while loading
         private bool keepMuted = false;
         private AudioSource backgroundMusic;
         private Coroutine muteCoroutine;
 
-        public bool isInitializationComplete = false; // Track whether regular SDLS initialization is complete
-        private bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
-        List<Canvas> disabledCanvases = new();
 
-        public void Awake()
-        {
-            SceneManager.sceneLoaded += OnSceneLoaded;
-        }
-
-        public IEnumerator WaitForInitAndStartRepositoryManager()
-        {
-            yield return new WaitUntil(() => isInitializationComplete);
-            ThreadPool.QueueUserWorkItem(_ => InitializeRepositoryManager());
-        }
-
-        private void InitializeRepositoryManager()
-        {
-            Plugin.Instance.DebugTimer("FastLoad");
-            try
-            {
-                RepositoryManager.Instance.Initialise();
-            }
-            catch (Exception ex)
-            {
-                Plugin.Instance.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message);
-            }
-            isRepositoryManagerInitComplete = true;
-            Plugin.Instance.DebugTimer("FastLoad");
-        }
-
-        public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            // Hide UI elements when switching to the title screen
-            if (scene.name == "TitleScreen") StartCoroutine(HideUIUntilInitComplete());
-        }
-
-        private IEnumerator HideUIUntilInitComplete()
-        {
-            yield return new WaitForEndOfFrame();
-            DisableAllUIElements();
-            StartForceMuteBackgroundMusic();
-            yield return new WaitUntil(() => isInitializationComplete && isRepositoryManagerInitComplete);
-            EnableAllUIElements();
-            UnmuteAndRestartBackgroundMusic();
-        }
-
-        private void StartForceMuteBackgroundMusic()
-        {
-            AudioSource[] audioSources = FindObjectsOfType<AudioSource>(); // Get audiosources
-            // Find the audiosource playing the main menu music
-            backgroundMusic = audioSources.FirstOrDefault(source => source.clip != null && source.clip.name == "OpeningScreenNoMelody");
-
-            if (backgroundMusic != null)
-            {
-                keepMuted = true;
-
-                muteCoroutine = StartCoroutine(ForceMuteCoroutine());
-            }
-            else Plugin.Instance.Warn("No background music AudioSource found to mute.");
-
-        }
-
-        private IEnumerator ForceMuteCoroutine()
-        {
-            while (keepMuted && backgroundMusic != null)
-            {
-                backgroundMusic.volume = 0f;
-                yield return null; // Wait for the next frame
-            }
-        }
-
-        private void UnmuteAndRestartBackgroundMusic()
-        {
-            keepMuted = false;
-            if (muteCoroutine != null)
-            {
-                StopCoroutine(muteCoroutine);
-                muteCoroutine = null; // Delete muteCoroutine
-            }
-
-            backgroundMusic.volume = 1f; // Reset original volume
-            backgroundMusic.time = 0f; // Reset to the beginning of the track
-        }
-
-        private void DisableAllUIElements()
+        public void DisableAllUIElements()
         {
             // Filter out the transition panel
             disabledCanvases = FindObjectsOfType<Canvas>()
@@ -116,7 +36,44 @@ namespace SDLS
             }
         }
 
-        private void EnableAllUIElements()
+        public void StartForceMuteBackgroundMusic()
+        {
+            AudioSource[] audioSources = FindObjectsOfType<AudioSource>(); // Get audiosources
+            // Find the audiosource playing the main menu music
+            backgroundMusic = audioSources.FirstOrDefault(source => source.clip != null && source.clip.name == "OpeningScreenNoMelody");
+
+            if (backgroundMusic != null)
+            {
+                keepMuted = true;
+
+                muteCoroutine = StartCoroutine(ForceMuteCoroutine());
+            }
+            else Plugin.I.Warn("No background music AudioSource found to mute.");
+        }
+
+        private IEnumerator ForceMuteCoroutine()
+        {
+            while (keepMuted && backgroundMusic != null)
+            {
+                backgroundMusic.volume = 0f;
+                yield return null; // Wait for the next frame
+            }
+        }
+
+        public void UnmuteAndRestartBackgroundMusic()
+        {
+            keepMuted = false;
+            if (muteCoroutine != null)
+            {
+                StopCoroutine(muteCoroutine);
+                muteCoroutine = null; // Delete muteCoroutine
+            }
+
+            backgroundMusic.volume = 1f; // Reset original volume
+            backgroundMusic.time = 0f; // Reset to the beginning of the track
+        }
+
+        public void EnableAllUIElements()
         {
             foreach (var canvas in disabledCanvases)
             {
@@ -142,10 +99,111 @@ namespace SDLS
             // Only remove the event listener and destroy the object if we've completed the fade
             if (elapsedTime >= FadeDuration)
             {
-                SceneManager.sceneLoaded -= OnSceneLoaded; // Remove the scene loaded event listener
                 Destroy(gameObject); // Destroy the FastLoad object once everything is done
             }
         }
+    }
 
+    internal sealed class LoadIntoSave : MonoBehaviour
+    {
+        private void Awake()
+        {
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        public IEnumerator LoadIntoSaveCoroutine(FastLoad fastLoader)
+        {
+            // Determine the condition based on fastLoader's state
+            if (fastLoader != null) // Check whether Fastload is activated
+            {
+                yield return new WaitUntil(() => fastLoader.isRepositoryManagerInitComplete); // Wait until all repositories are loaded
+            }
+            else
+            {
+                yield return new WaitUntil(() => Plugin.jsonInitializationComplete); // Wait until SDLS JSON has been processed
+            }
+            LoadMostRecentSave();
+        }
+
+        private void LoadMostRecentSave()
+        {
+            string characterName = CharacterRepository.Instance.GetCharacterNames(true).FirstOrDefault();
+            if (characterName != null) // A save exists
+                CharacterRepository.Instance.LoadGame(characterName);
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // Hide UI elements when switching to the title screen
+            if (scene.name == "TitleScreen")
+            {
+                SDLSUIAndSceneManager.I.DisableAllUIElements();
+            }
+            else if (scene.name == "Loading" || scene.name == "Sailing")
+            {
+                Destroy(gameObject);
+            }
+        }
+    }
+
+    internal sealed class FastLoad : MonoBehaviour
+    {
+        public bool isInitializationComplete = false; // Track whether regular SDLS initialization is complete
+        public bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
+
+        private void Awake()
+        {
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        public IEnumerator WaitForInitAndStartRepositoryManager()
+        {
+            yield return new WaitUntil(() => Plugin.jsonInitializationComplete);
+            ThreadPool.QueueUserWorkItem(_ => InitializeRepositoryManager());
+        }
+
+        private void InitializeRepositoryManager()
+        {
+            try
+            {
+                Plugin.I.DebugTimer("FastLoad");
+                RepositoryManager.Instance.Initialise();
+            }
+            catch (Exception ex)
+            {
+                Plugin.I.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message);
+            }
+            finally
+            {
+                isRepositoryManagerInitComplete = true;
+                Plugin.I.DebugTimer("FastLoad");
+            }
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // Hide UI elements when switching to the title screen
+            if (scene.name == "TitleScreen") StartCoroutine(HideUIUntilInitComplete());
+        }
+
+        private IEnumerator HideUIUntilInitComplete()
+        {
+            yield return new WaitForEndOfFrame();
+            SDLSUIAndSceneManager.I.DisableAllUIElements();
+            SDLSUIAndSceneManager.I.StartForceMuteBackgroundMusic();
+            yield return new WaitUntil(() => isInitializationComplete && isRepositoryManagerInitComplete);
+            SDLSUIAndSceneManager.I.EnableAllUIElements();
+            SDLSUIAndSceneManager.I.UnmuteAndRestartBackgroundMusic();
+        }
     }
 }

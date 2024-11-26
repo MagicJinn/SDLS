@@ -35,8 +35,8 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                                Plugin.Instance.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
-                                Plugin.Instance.Error(ex.Message);
+                                Plugin.I.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
+                                Plugin.I.Error(ex.Message);
                                 return "";
                         }
                 }
@@ -80,7 +80,7 @@ namespace SDLS
                         }
                         catch (Exception ex)
                         {
-                                Plugin.Instance.Error("Error writing file: " + ex.Message);
+                                Plugin.I.Error("Error writing file: " + ex.Message);
                         }
                 }
 
@@ -89,7 +89,7 @@ namespace SDLS
                         string filePath = fullpath + ".json";
                         if (File.Exists(filePath))
                         {
-                                Plugin.Instance.Warn("Removing " + fullpath);
+                                Plugin.I.Warn("Removing " + fullpath);
                                 File.Delete(filePath);
                         }
                 }

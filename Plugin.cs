@@ -476,19 +476,19 @@ namespace SDLS
             }
         }
 
-        private void LogValueOverwritten(string key, object NameOrId, object oldValue, object newValue)
-        {
-            if (logConflicts)
-            {
-                string modToBlame = $"{currentModName} overwrote a value:";
-                Warn(modToBlame);
-                conflictLog.Add(modToBlame);
+        // private void LogValueOverwritten(string key, object NameOrId, object oldValue, object newValue)
+        // {
+        //     if (logConflicts)
+        //     {
+        //         string modToBlame = $"{currentModName} overwrote a value:";
+        //         Warn(modToBlame);
+        //         conflictLog.Add(modToBlame);
 
-                string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'.\nOld value: {oldValue}\nNew value: {newValue}";
-                Warn(overwrittenValues);
-                conflictLog.Add(overwrittenValues);
-            }
-        }
+        //         string overwrittenValues = $"Key '{key}' overwritten in Id '{NameOrId}'.\nOld value: {oldValue}\nNew value: {newValue}";
+        //         Warn(overwrittenValues);
+        //         conflictLog.Add(overwrittenValues);
+        //     }
+        // }
 
         // private void LogConflictsToFile()
         // {
@@ -527,12 +527,6 @@ namespace SDLS
 
             string line = lines[new System.Random().Next(0, lines.Length)];
             Log(line + "\n");
-
-            // Add the line to the loading screen tips
-            Array.Resize(ref StaticEntities.LoadingScreenTips, StaticEntities.LoadingScreenTips.Length + 1);
-            StaticEntities.LoadingScreenTips[StaticEntities.LoadingScreenTips.Length - 1] = line;
-
-            StaticEntities.LoadingScreenTips = ["\n\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea."];
         }
 
         // Simplified log functions

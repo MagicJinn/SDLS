@@ -7,7 +7,6 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
-using Sunless.Game.Entities;
 
 namespace SDLS
 {
@@ -54,6 +53,8 @@ namespace SDLS
             I = this;
             LoadConfig();
             InitializationLine();
+
+            PatchMethodsForPerformance.DoPerformancePatches();
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
             ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async

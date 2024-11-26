@@ -6,12 +6,62 @@ using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using HarmonyLib;
+using Sunless.Game.Scripts.UI.Intro;
 
 namespace SDLS
 {
+    internal sealed class PatchMethodsForPerformance
+    {
+        private static AsyncOperation backgroundTitleScreenLoad;
+
+        public static void DoPerformancePatches()
+        {
+            // Patch the incorrect use of LoadSceneAsync
+            Harmony.CreateAndPatchAll(typeof(IntroScriptStartPatch));
+            Harmony.CreateAndPatchAll(typeof(IntroScriptLoadTitleScreenPatch));
+        }
+
+        [HarmonyPatch(typeof(IntroScript), "Start")]
+        private static class IntroScriptStartPatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(IntroScript __instance)
+            {
+                backgroundTitleScreenLoad = SceneManager.LoadSceneAsync("TitleScreen"); // Load async in the background
+                backgroundTitleScreenLoad.allowSceneActivation = false; // Prevent automatic activation
+                return true; // Run the original function
+            }
+        }
+        [HarmonyPatch(typeof(IntroScript), "LoadTitleScreen")]
+        private static class IntroScriptLoadTitleScreenPatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(IntroScript __instance)
+            {
+                backgroundTitleScreenLoad.allowSceneActivation = true;
+                return false; // Skip the original function
+            }
+        }
+    }
+
     internal sealed class SDLSUIAndSceneManager : MonoBehaviour
     {
-        public static SDLSUIAndSceneManager I = new();
+        private static SDLSUIAndSceneManager _instance;
+        public static SDLSUIAndSceneManager I
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    // Create a new GameObject and add the component
+                    GameObject go = new GameObject("SDLSUIAndSceneManager");
+                    _instance = go.AddComponent<SDLSUIAndSceneManager>();
+                    DontDestroyOnLoad(go);
+                }
+                return _instance;
+            }
+        }
 
         private const string TransitionPanelName = "TransitionPanel";
         private const float FadeDuration = 1.5f; // Fade duration in seconds
@@ -21,7 +71,6 @@ namespace SDLS
         private bool keepMuted = false;
         private AudioSource backgroundMusic;
         private Coroutine muteCoroutine;
-
 
         public void DisableAllUIElements()
         {
@@ -45,7 +94,6 @@ namespace SDLS
             if (backgroundMusic != null)
             {
                 keepMuted = true;
-
                 muteCoroutine = StartCoroutine(ForceMuteCoroutine());
             }
             else Plugin.I.Warn("No background music AudioSource found to mute.");
@@ -83,6 +131,7 @@ namespace SDLS
                 StartCoroutine(FadeInCanvas(canvasGroup)); // Fade in canvas
             }
         }
+
 
         private IEnumerator FadeInCanvas(CanvasGroup canvasGroup)
         {
@@ -153,7 +202,6 @@ namespace SDLS
 
     internal sealed class FastLoad : MonoBehaviour
     {
-        public bool isInitializationComplete = false; // Track whether regular SDLS initialization is complete
         public bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
 
         private void Awake()
@@ -201,7 +249,7 @@ namespace SDLS
             yield return new WaitForEndOfFrame();
             SDLSUIAndSceneManager.I.DisableAllUIElements();
             SDLSUIAndSceneManager.I.StartForceMuteBackgroundMusic();
-            yield return new WaitUntil(() => isInitializationComplete && isRepositoryManagerInitComplete);
+            yield return new WaitUntil(() => Plugin.jsonInitializationComplete && isRepositoryManagerInitComplete);
             SDLSUIAndSceneManager.I.EnableAllUIElements();
             SDLSUIAndSceneManager.I.UnmuteAndRestartBackgroundMusic();
         }

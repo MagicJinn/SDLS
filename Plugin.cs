@@ -7,7 +7,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
-using System.Drawing.Text;
+using Sunless.Game.Entities;
 
 namespace SDLS
 {
@@ -490,16 +490,16 @@ namespace SDLS
             }
         }
 
-        private void LogConflictsToFile()
-        {
-            if (conflictLog.Count > 0)
-            {
-                string fileName = "SDLS_Merge_Conflicts.log";
-                string writePath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
-                using StreamWriter writer = new StreamWriter(writePath, false);
-                foreach (string str in conflictLog) writer.WriteLine(str);
-            }
-        }
+        // private void LogConflictsToFile()
+        // {
+        //     if (conflictLog.Count > 0)
+        //     {
+        //         string fileName = "SDLS_Merge_Conflicts.log";
+        //         string writePath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+        //         using StreamWriter writer = new StreamWriter(writePath, false);
+        //         foreach (string str in conflictLog) writer.WriteLine(str);
+        //     }
+        // }
 
         private void InitializationLine()
         {
@@ -525,7 +525,14 @@ namespace SDLS
             "You merely adopted the JSON. I was born in it, molded by it.",
             };
 
-            Log(lines[new System.Random().Next(0, lines.Length)] + "\n");
+            string line = lines[new System.Random().Next(0, lines.Length)];
+            Log(line + "\n");
+
+            // Add the line to the loading screen tips
+            Array.Resize(ref StaticEntities.LoadingScreenTips, StaticEntities.LoadingScreenTips.Length + 1);
+            StaticEntities.LoadingScreenTips[StaticEntities.LoadingScreenTips.Length - 1] = line;
+
+            StaticEntities.LoadingScreenTips = ["\n\nIn Xanadu did Kubla Khan\nA stately pleasure-dome decree:\nWhere Alph, the sacred river, ran\nThrough caverns measureless to man\nDown to a sunless sea."];
         }
 
         // Simplified log functions

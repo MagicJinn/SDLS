@@ -54,12 +54,16 @@ namespace SDLS
             I = this;
             LoadConfig();
             InitializationLine();
-            _ = GameProvider.Instance; // Prevent Resources.Load from being called async, by caching GameProvider
 
             PatchMethodsForPerformance.DoPerformancePatches();
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
             ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async
+        }
+
+        private void Start()
+        {
+            _ = GameProvider.Instance; // Prevent Resources.Load from being called async, by caching GameProvider
             if (ConfigOptions["fastLoad"]) FastLoadInitialization();
             if (ConfigOptions["loadIntoSave"]) LoadIntoSaveInitialization();
         }

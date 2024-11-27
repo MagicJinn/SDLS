@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
+using Sunless.Game.ApplicationProviders;
 
 namespace SDLS
 {
@@ -53,6 +54,7 @@ namespace SDLS
             I = this;
             LoadConfig();
             InitializationLine();
+            _ = GameProvider.Instance; // Prevent Resources.Load from being called async, by caching GameProvider
 
             PatchMethodsForPerformance.DoPerformancePatches();
 
@@ -474,7 +476,7 @@ namespace SDLS
 
         public void DebugTimer(string name)
         {
-            if (!ConfigOptions["logDebugTimers"]) return;
+            // if (!ConfigOptions["logDebugTimers"]) return;
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer

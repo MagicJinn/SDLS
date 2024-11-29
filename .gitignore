@@ -4,3 +4,4 @@
 /dependencies
 *.sln
 *.Config
+.markdownlint.jsonc

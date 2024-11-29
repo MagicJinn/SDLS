@@ -10,6 +10,8 @@ When creating a mod, a mod author can leave any values that their story or quali
 
 On startup, before any game logic executes, SDLS looks for valid SDLS files in your addon directory, recursively loops through the data, constructs a temporary data structure, a "dummy tree", and casts the values of the original file into it. It then saves this data next to the original SDLS file, as a .json file, which the game then loads. As a modder, you can distribute the SDLS files, as well as the generated json files, for those who do and don't have SDLS installed. As a user, you can use SDLS to load SDLS mods, if the modder doesn't provide the json files alongside them.
 
+**For information and tutorials on how to use SDLS, see the [Wiki](https://github.com/MagicJinn/SDLS/wiki).**
+
 ### **Current Support and experimental features:**
 
 During certain phases of the game's startup, the game tries to load these 16 files:

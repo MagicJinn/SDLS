@@ -2,7 +2,8 @@
 
 SDLS is a Unity BepInEx plugin for Sunless Sea.
 
-## Sunless Data Loading Simplified (SDLS) is both a modders tool and a clientside mod that allows for Sunless Sea mod creation, without (most of) the jank. About 70% of the fields in a Sunless Sea .json are unused, and this mod allows you to safely remove them!
+## Sunless Data Loading Simplified (SDLS) is both a modders tool and a clientside mod that allows for Sunless Sea mod creation, without (most of) the jank. About 70% of the fields in a Sunless Sea .json are unused, and this mod allows you to safely remove them!<br><br>It also [increases loading speed](Fastload), and adds quality of life features like [LoadIntoSave](LoadIntoSave)!
+
 
 ### **How does it work?**
 
@@ -12,7 +13,7 @@ On startup, before any game logic executes, SDLS looks for valid SDLS files in y
 
 **For information and tutorials on how to use SDLS, see the [Wiki](https://github.com/MagicJinn/SDLS/wiki).**
 
-### **Current Support and experimental features:**
+### **Current Support and experimental features**
 
 During certain phases of the game's startup, the game tries to load these 16 files:
 
@@ -35,13 +36,13 @@ During certain phases of the game's startup, the game tries to load these 16 fil
 
 The highlighted entries are **officially** supported. The others will still work, but this is **experimental**. I cannot guarantee I didn't make any mistakes.
 
-### **What this mod DOESN'T DO:**
+### **What this mod DOESN'T DO**
 
 * Create a new mod format. SDLS *simplifies* mod creation by allowing you to omit unused fields, but the mod format stays the same.
 * Modify the game's files. SDLS is a compatibility layer, meaning it runs *before* the game is loaded, and does not touch the game's files at all.
 * Fix mistakes you make, or assume default values when you don't enter one. Some values such as BaseHullDamage have been defaulted to 0 in SDLS, but do not rely on this.
 
-## **Planned Features:**
+## **Planned Features**
 
 * Mod compatibility. Have a config option to merge mods to resolve compatibility issues.
 * Expanded official support for all loaded .json files.
@@ -79,7 +80,8 @@ dotnet build -c Release -p:Optimize=true
 
 The DLLs should be located in `bin/Debug/net35` and `bin/Release/net35` respectively.
 
-**Special thanks:**
+### **Special thanks**
 
 * [Desblat](http://next.nexusmods.com/profile/desblat) and [CleverCrumbish](http://next.nexusmods.com/profile/CleverCrumbish) for helping me with realizing and refining the concept.
+* [Exotico](https://github.com/andraemon) for creating the excellent reference document on which the SDLS reference is based.
 * The people in the [BepInEx Discord](http://discord.gg/MpFEDAg)

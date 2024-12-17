@@ -556,8 +556,8 @@ namespace SDLS
 
         // Simplified log functions
         public void Log(object message) { Logger.LogInfo(message); }
-        public void Warn(object message) { Console.WriteLine(message); }
-        public void Error(object message) { Console.WriteLine(message); }
+        public void Warn(object message) { Logger.LogWarning(message); }
+        public void Error(object message) { Logger.LogError(message); }
 #if DEBUG
         // Log functions that don't run when built in Release mode
         public void DLog(object message) { Log(message); }

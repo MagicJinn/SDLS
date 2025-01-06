@@ -63,8 +63,13 @@ namespace SDLS
 
         private void Start()
         {
-            _ = GameProvider.Instance; // Prevent Resources.Load from being called async, by caching GameProvider
-            if (ConfigOptions["fastLoad"]) FastLoadInitialization();
+            if (ConfigOptions["fastLoad"])
+            {
+                // Prevent Resources.Load from being called async, by caching GameProvider
+                // Only required for async loading (though it does not necessarily slow down sync loading, since it's needed later)
+                _ = GameProvider.Instance;
+                FastLoadInitialization();
+            }
             if (ConfigOptions["loadIntoSave"]) LoadIntoSaveInitialization();
         }
 

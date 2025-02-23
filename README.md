@@ -54,7 +54,7 @@ The highlighted entries are **officially** supported. The others will still work
 To develop and build the plugin, there are a couple of prerequisites. After cloning the repository
 
 ```bash
-https://github.com/MagicJinn/SDLS.git
+git clone https://github.com/MagicJinn/SDLS.git
 cd SDLS
 ```
 

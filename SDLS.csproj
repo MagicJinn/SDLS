@@ -17,6 +17,10 @@
 
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
+    <Reference Include="UnityEngine.UI">
+      <HintPath>dependencies/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>      <!-- Prevent this dependency from being copied -->
+    </Reference>
     <Reference Include="Sunless.Game">
       <HintPath>dependencies/Sunless.Game.dll</HintPath>
       <Private>false</Private>      <!-- Prevent this dependency from being copied -->

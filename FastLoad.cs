@@ -101,7 +101,7 @@ namespace SDLS
                 keepMuted = true;
                 muteCoroutine = StartCoroutine(ForceMuteCoroutine());
             }
-            else Plugin.I.Warn("No background music AudioSource found to mute.");
+            else Plugin.Instance.Warn("No background music AudioSource found to mute.");
         }
 
         private IEnumerator ForceMuteCoroutine()
@@ -208,7 +208,30 @@ namespace SDLS
     {
         public bool isRepositoryManagerInitComplete = false; // Track whether RepositoryManager is initialized
 
+        private GameObject progressBarCanvas;
+        private ProgressBar progressBar;
 
+        // How many entities there usually are to be loaded
+        // Close enough for progress bar purposes
+        const int totalExpectedEntities = 7624;
+
+        private readonly List<Type> DataRepositories =
+        [
+            typeof(QualityRepository),
+            typeof(AreaRepository),
+            typeof(EventRepository),
+            typeof(ExchangeRepository),
+            typeof(PersonaRepository),
+            typeof(TileRulesRepository),
+            typeof(TileRepository),
+            typeof(TileSetRepository),
+            typeof(CombatAttackRepository),
+            typeof(CombatItemRepository),
+            typeof(SpawnedEntityRepository),
+            typeof(AssociationsRepository),
+            typeof(TutorialRepository),
+            typeof(FlavourRepository)
+        ];
 
         private void Awake()
         {
@@ -230,18 +253,14 @@ namespace SDLS
         {
             try
             {
-                Plugin.I.DebugTimer("FastLoad");
+                Plugin.Instance.DebugTimer("FastLoad");
                 RepositoryManager.Instance.Initialise();
             }
             catch (Exception ex)
-            {
-                Plugin.I.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message);
-            }
-            finally
-            {
-                isRepositoryManagerInitComplete = true;
-                Plugin.I.DebugTimer("FastLoad");
-            }
+            { Plugin.Instance.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message); }
+
+            isRepositoryManagerInitComplete = true;
+            Plugin.Instance.DebugTimer("FastLoad");
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -253,9 +272,6 @@ namespace SDLS
             }
         }
 
-        private GameObject progressBarCanvas;
-        private ProgressBar progressBar;
-
         private IEnumerator RepositoryLoadProgressbar()
         {
             // Create a new Canvas for the progress bar, since all other canvases are disabled
@@ -265,16 +281,15 @@ namespace SDLS
             progressBarCanvas.AddComponent<CanvasScaler>();
 
             progressBar = new ProgressBar(progressBarCanvas, () => { })
-            {
-                Message = "Loading...",
-            };
+            { Message = "Loading...", };
             progressBar.InnerGameObject.FindComponentInDescendant<Button>("Exit").gameObject.SetActive(false); // Hide the exit button
+            progressBar.InnerGameObject.FindComponentInDescendant<Image>("Splitter").gameObject.SetActive(false); // Hide the exit button
 
             var progressbarRectTransformInner = progressBar.InnerGameObject.GetComponent<RectTransform>();
             if (progressbarRectTransformInner.rect.width == 0 || progressbarRectTransformInner.rect.height == 0) yield return new WaitForEndOfFrame(); // Wait until the next frame for RectTransform to be initialized
             float progressBarWidth = progressbarRectTransformInner.rect.width;
             float progressBarHeight = progressbarRectTransformInner.rect.height;
-            Debug.Log($"Progress bar width: {progressBarWidth}, height: {progressBarHeight}");
+
             progressbarRectTransformInner.anchorMin = progressbarRectTransformInner.anchorMax = new Vector2(1, 0); // Anchor to bottom right corner
 
             // Offset the position based on the width and height of the progress bar
@@ -304,7 +319,6 @@ namespace SDLS
             bool moveUp = UnityEngine.Random.value < 0.1f;
             float screenHeight = Screen.height; // Get screen height to determine when it's fully offscreen
 
-
             // Move the progress bar off screen slowly
             while (moveUp ? rectTransform.anchoredPosition.y < screenHeight + rectTransform.rect.height
                           : rectTransform.anchoredPosition.y > -rectTransform.rect.height)
@@ -317,62 +331,59 @@ namespace SDLS
             Destroy(progressBarCanvas); // Destroy the Canvas holding the progress bar
         }
 
-
-
-
-        private readonly List<Type> DataRepositories =
-        [
-            typeof(QualityRepository),
-            typeof(AreaRepository),
-            typeof(EventRepository),
-            typeof(ExchangeRepository),
-            typeof(PersonaRepository),
-            typeof(TileRulesRepository),
-            typeof(TileRepository),
-            typeof(TileSetRepository),
-            typeof(CombatAttackRepository),
-            typeof(CombatItemRepository),
-            typeof(SpawnedEntityRepository),
-            typeof(AssociationsRepository),
-            typeof(TutorialRepository),
-            typeof(NavigationConstantsRepository),
-            typeof(CombatConstantsRepository),
-            typeof(PromoDataRepository),
-            typeof(FlavourRepository)
-        ];
-
-        private int initializedCount = 0;
-
         private IEnumerator CheckRepositoriesCoroutine(ProgressBar progressBar)
         {
-            while (DataRepositories.Count > 0)
-            {
-                List<Type> initialized = new List<Type>();
+            // Track old and new count to determine whether the repository is fully loaded (if stagnant at non-zero count, its loaded)
+            var previousCounts = new Dictionary<string, int>();
+            var currentCounts = new Dictionary<string, int>();
+            var completedRepos = new HashSet<Type>();
+            int loadedEntities = 0;
 
-                foreach (var repo in DataRepositories.ToList()) // Use ToList() to avoid modifying the collection while iterating
+            while (DataRepositories.Count > completedRepos.Count) // Check whether all repositories are loaded
+            {
+                // Swap dictionaries to avoid unnecessary allocations
+                var temp = previousCounts;
+                previousCounts = currentCounts;
+                currentCounts = temp;
+                currentCounts.Clear();
+
+                foreach (var repo in DataRepositories)
                 {
-                    FieldInfo field = repo.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
-                    if (field != null && field.GetValue(null) != null)
+                    if (completedRepos.Contains(repo)) continue;
+
+                    int entityCount = GetRepositoryEntityCount(repo);
+                    if (entityCount > 0)
                     {
-                        initializedCount++;
-                        initialized.Add(repo);
-                        Debug.Log($"{repo.Name} initialized. Total count: {initializedCount}");
+                        currentCounts[repo.Name] = entityCount;
+
+                        // Check if the count is stable
+                        if (previousCounts.TryGetValue(repo.Name, out int prevCount) && prevCount == entityCount)
+                        {
+                            completedRepos.Add(repo);
+                            loadedEntities += entityCount;
+                        }
                     }
                 }
 
-                // Update the progress bar percentage
-                progressBar.PercentageComplete = initializedCount / DataRepositories.Count * 100; // Cast to float for accurate division
-
-                // Remove initialized repositories from the list
-                foreach (Type repo in initialized)
-                {
-                    DataRepositories.Remove(repo);
-                }
-
-                yield return new WaitForSeconds(0.1f); // Recheck every second
+                progressBar.PercentageComplete = Math.Max(loadedEntities * 100 / totalExpectedEntities, 100);
+                yield return new WaitForSeconds(0.05f);
             }
+        }
 
-            Debug.Log("All repositories initialized!");
+        private int GetRepositoryEntityCount(Type repo)
+        {
+            FieldInfo field = repo.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (field?.GetValue(null) is object repoInstance)
+            {
+                FieldInfo entitiesField = repoInstance.GetType().GetField("Entities",
+                    BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+
+                if (entitiesField?.GetValue(repoInstance) is IDictionary dictionary)
+                {
+                    return dictionary.Count;
+                }
+            }
+            return 0;
         }
     }
 }

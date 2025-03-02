@@ -7,10 +7,10 @@ using UnityEngine;
 
 namespace SDLS
 {
-        internal static class JSON
-        {
-                private static readonly JsonReader JSONReader = new JsonReader();
-                private static readonly JsonWriter JSONWriter = new JsonWriter();
+    internal static class JSON
+    {
+        public static readonly JsonReader JSONReader = new JsonReader();
+        public static readonly JsonWriter JSONWriter = new JsonWriter();
 
         public static string ReadFileSystemJson(string fullFilePath)
         {
@@ -18,23 +18,23 @@ namespace SDLS
 
             string str = File.ReadAllText(fullFilePath);
             return (str != null) ?
-                        (str.StartsWith("[") && str.EndsWith("]") ?
-                         str.Substring(1, str.Length - 2) :
-                         str) : // Return the string if the file isn't in an array
-                         null; // Return null if the file is empty
-                }
+            (str.StartsWith("[") && str.EndsWith("]") ?
+             str.Substring(1, str.Length - 2) :
+             str) : // Return the string if the file isn't in an array
+             null; // Return null if the file is empty
+        }
 
-                public static string ReadInternalJson(string resourceName) // Method for loading embedded JSON resources
-                {
-                        try
-                        {
-                                string name = Plugin.GetLastWord(resourceName);
-                                string fullPath = Plugin.GetEmbeddedPath("default");
-                                string fullResourceName = $"{fullPath}.{name}.json"; // Construct the full resource name
-                                return Plugin.ReadTextResource(fullResourceName);
-                        }
-                        catch (Exception ex)
-                        {
+        public static string ReadInternalJson(string resourceName) // Method for loading embedded JSON resources
+        {
+            try
+            {
+                string name = Plugin.GetLastWord(resourceName);
+                string fullPath = Plugin.GetEmbeddedPath("default");
+                string fullResourceName = $"{fullPath}.{name}.json"; // Construct the full resource name
+                return Plugin.ReadTextResource(fullResourceName);
+            }
+            catch (Exception ex)
+            {
                 Plugin.Instance.Error("Something went seriously wrong and SDLS was not able to load it's own embedded resource.");
                 Plugin.Instance.Error(ex.Message);
                 return "";
@@ -65,7 +65,7 @@ namespace SDLS
             return jsonObjectsArray;
         }
 
-        public static void CreateJSON(string strObjJoined, string relativeWritePath, bool hidden = false)
+        public static void CreateJSON(string strObjJoined, string relativeWritePath)
         {
             string writePath = Path.Combine(Plugin.PersistentDataPath, relativeWritePath) + ".json";
             string path = Plugin.GetParentPath(writePath);
@@ -74,33 +74,12 @@ namespace SDLS
             {
                 if (!Directory.Exists(path)) Directory.CreateDirectory(path);
                 File.WriteAllText(writePath, relativeWritePath.ToLower().Contains("constants")
-                                    ? strObjJoined  // Output file as a single object
-                                    : $"[{strObjJoined}]"); // Put file in an array
-
-                if (hidden)
-                {
-                    if (IsWindows())
-                    {
-                        File.SetAttributes(writePath, File.GetAttributes(writePath) | FileAttributes.Hidden);
-                    }
-                    else
-                    {
-                        // On Unix-based systems, hide the file by renaming it with a dot prefix
-                        string hiddenPath = Path.Combine(path, "." + Path.GetFileName(writePath));
-                        File.Move(writePath, hiddenPath);
-                    }
-                }
+                ? strObjJoined  // Output file as a single object
+                : $"[{strObjJoined}]"); // Put file in an array
             }
             catch (Exception ex)
             {
                 Plugin.Instance.Error("Error writing file: " + ex.Message);
-            }
-
-
-            bool IsWindows()
-            {
-                if (Environment.OSVersion.Platform.ToString().Contains("Win")) return true;
-                return false;
             }
         }
 
@@ -130,23 +109,23 @@ namespace SDLS
         }
 
         public static string[] GetFilePaths() => new[]
-                {
-                "entities/qualities",
-                "entities/areas",
-                "entities/events",
-                "entities/exchanges",
-                "entities/personas",
-                "geography/TileRules",
-                "geography/Tiles",
-                "geography/TileSets",
-                "encyclopaedia/CombatAttacks",
-                "encyclopaedia/CombatItems",
-                "encyclopaedia/SpawnedEntities",
-                "encyclopaedia/Associations",
-                "encyclopaedia/Tutorials",
-                "encyclopaedia/Flavours",
-                "constants/combatconstants",
-                "constants/navigationconstants"
-                };
+        {
+    "entities/qualities",
+    "entities/areas",
+    "entities/events",
+    "entities/exchanges",
+    "entities/personas",
+    "geography/TileRules",
+    "geography/Tiles",
+    "geography/TileSets",
+    "encyclopaedia/CombatAttacks",
+    "encyclopaedia/CombatItems",
+    "encyclopaedia/SpawnedEntities",
+    "encyclopaedia/Associations",
+    "encyclopaedia/Tutorials",
+    "encyclopaedia/Flavours",
+    "constants/combatconstants",
+    "constants/navigationconstants"
+    };
     }
 }

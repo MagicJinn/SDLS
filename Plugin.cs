@@ -483,13 +483,13 @@ namespace SDLS
             }
         }
 
-        public void DebugTimer(string name)
+        public double DebugTimer(string name)
         {
             // if (!ConfigOptions["logDebugTimers"]) return;
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer
-                Log(string.Format("Starting process {0}", name));
+                Log($"Starting process {name}");
                 stopwatch = new Stopwatch();
                 stopwatch.Start();
                 DebugTimers[name] = stopwatch;
@@ -497,13 +497,15 @@ namespace SDLS
             else if (stopwatch.IsRunning)
             { // Stop the timer and log the result
                 stopwatch.Stop();
-                Log(string.Format("Finished process {0}. Took {1:F3} seconds.", name, stopwatch.Elapsed.TotalSeconds));
+                Log($"Finished process {name}. Took {stopwatch.Elapsed.TotalSeconds:F3} seconds.");
+                return stopwatch.Elapsed.TotalSeconds;
             }
             else
             { // Removes the timer and starts it again
                 DebugTimers.Remove(name);
                 DebugTimer(name);
             }
+            return -1; // Return -1 because not every operation needs to return a value
         }
 
         // private void LogValueOverwritten(string key, object NameOrId, object oldValue, object newValue)

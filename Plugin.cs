@@ -43,7 +43,7 @@ namespace SDLS
 
         // Tracks every file SDLS creates. Used during cleanup
         private List<string> createdFiles = new();
-        public static Plugin I { get; private set; }
+        public static Plugin Instance { get; private set; }
         public static bool jsonInitializationComplete = false;
         private FastLoad fastLoader;
         private LoadIntoSave saveLoader;
@@ -51,7 +51,7 @@ namespace SDLS
         private void Awake( /* Run by Unity on game start */ )
         {
             Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-            I = this;
+            Instance = this;
             LoadConfig();
             InitializationLine();
 
@@ -146,8 +146,8 @@ namespace SDLS
                             string modFolderInAddon = Path.Combine("addon", modFolder);
                             string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
 
-                            string fileContent = JSON.ReadGameJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
-                            if (fileContent == null) fileContent = JSON.ReadGameJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
+                            string fileContent = JSON.ReadFileSystemJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
+                            if (fileContent == null) fileContent = JSON.ReadFileSystemJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
 
                             if (fileContent != null)
                             {
@@ -474,7 +474,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    I.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    Instance.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 

@@ -110,22 +110,22 @@ namespace SDLS
 
         public static string[] GetFilePaths() => new[]
         {
-    "entities/qualities",
-    "entities/areas",
-    "entities/events",
-    "entities/exchanges",
-    "entities/personas",
-    "geography/TileRules",
-    "geography/Tiles",
-    "geography/TileSets",
-    "encyclopaedia/CombatAttacks",
-    "encyclopaedia/CombatItems",
-    "encyclopaedia/SpawnedEntities",
-    "encyclopaedia/Associations",
-    "encyclopaedia/Tutorials",
-    "encyclopaedia/Flavours",
-    "constants/combatconstants",
-    "constants/navigationconstants"
-    };
+        "entities/qualities",
+        "entities/areas",
+        "entities/events",
+        "entities/exchanges",
+        "entities/personas",
+        "geography/TileRules",
+        "geography/Tiles",
+        "geography/TileSets",
+        "encyclopaedia/CombatAttacks",
+        "encyclopaedia/CombatItems",
+        "encyclopaedia/SpawnedEntities",
+        "encyclopaedia/Associations",
+        "encyclopaedia/Tutorials",
+        "encyclopaedia/Flavours",
+        "constants/combatconstants",
+        "constants/navigationconstants"
+        };
     }
 }

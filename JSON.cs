@@ -9,8 +9,8 @@ namespace SDLS
 {
     internal static class JSON
     {
-        public static readonly JsonReader JSONReader = new JsonReader();
-        public static readonly JsonWriter JSONWriter = new JsonWriter();
+        private static readonly JsonReader JSONReader = new JsonReader();
+        private static readonly JsonWriter JSONWriter = new JsonWriter();
 
         public static string ReadFileSystemJson(string fullFilePath)
         {

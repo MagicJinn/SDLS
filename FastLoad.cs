@@ -1,18 +1,19 @@
-using Sunless.Game.Data;
 using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 using System.Threading;
 using UnityEngine.SceneManagement;
-using System.Collections.Generic;
-using System.Linq;
 using System;
+using System.Linq;
+using System.Reflection;
+using System.Collections.Generic;
 using HarmonyLib;
-using Sunless.Game.Scripts.UI.Intro;
-using Sunless.Game.UI.Components;
-using UnityEngine.UI;
+using Sunless.Game.Data;
+using Sunless.Game.Data.BaseClasses;
 using Sunless.Game.Data.SNRepositories;
 using Sunless.Game.Data.S3Repositories;
-using System.Reflection;
+using Sunless.Game.UI.Components;
+using Sunless.Game.Scripts.UI.Intro;
 using Sunless.Game.Utilities;
 
 namespace SDLS
@@ -246,7 +247,46 @@ namespace SDLS
         public IEnumerator WaitForInitAndStartRepositoryManager()
         {
             yield return new WaitUntil(() => Plugin.jsonInitializationComplete);
+            EnsureFilesCopiedFromDLLSafely(); // Prevent https://github.com/MagicJinn/SDLS/issues/4 from occurring
             ThreadPool.QueueUserWorkItem(_ => InitializeRepositoryManager());
+        }
+
+        private void EnsureFilesCopiedFromDLLSafely()
+        {
+            // Array of repository instances to process
+            var repositories = new object[]
+            {
+            QualityRepository.Instance,
+            AreaRepository.Instance,
+            EventRepository.Instance,
+            ExchangeRepository.Instance,
+            PersonaRepository.Instance,
+            TileRulesRepository.Instance,
+            TileRepository.Instance,
+            TileSetRepository.Instance,
+            CombatAttackRepository.Instance,
+            CombatItemRepository.Instance,
+            SpawnedEntityRepository.Instance,
+            AssociationsRepository.Instance,
+            TutorialRepository.Instance,
+            NavigationConstantsRepository.Instance,
+            CombatConstantsRepository.Instance,
+            PromoDataRepository.Instance,
+            FlavourRepository.Instance
+            };
+
+            foreach (var repository in repositories)
+            {
+                // Use reflection to access protected EnsureCopiedFromDll method
+                MethodInfo method = repository
+                                        .GetType()
+                                            .GetMethod(
+                                                "EnsureCopiedFromDll",
+                                                BindingFlags.Instance |
+                                                BindingFlags.NonPublic);
+                if (method != null) method.Invoke(repository, null);
+                else Plugin.Instance.Warn($"EnsureCopiedFromDll failed on {repository.GetType().Name}");
+            }
         }
 
         private void InitializeRepositoryManager()

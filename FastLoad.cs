@@ -9,12 +9,12 @@ using System.Reflection;
 using System.Collections.Generic;
 using HarmonyLib;
 using Sunless.Game.Data;
-using Sunless.Game.Data.BaseClasses;
 using Sunless.Game.Data.SNRepositories;
 using Sunless.Game.Data.S3Repositories;
 using Sunless.Game.UI.Components;
 using Sunless.Game.Scripts.UI.Intro;
 using Sunless.Game.Utilities;
+
 
 namespace SDLS
 {
@@ -27,6 +27,9 @@ namespace SDLS
             // Patch the incorrect use of LoadSceneAsync
             Harmony.CreateAndPatchAll(typeof(IntroScriptStartPatch));
             Harmony.CreateAndPatchAll(typeof(IntroScriptLoadTitleScreenPatch));
+
+            // Patch the RepositoryManager to load heavy hitters in the background
+            Harmony.CreateAndPatchAll(typeof(RepositoryManagerInitialisePatch));
         }
 
         [HarmonyPatch(typeof(IntroScript), "Start")]
@@ -48,6 +51,92 @@ namespace SDLS
             {
                 backgroundTitleScreenLoad.allowSceneActivation = true; // Allow the scene to activate
                 return false; // Skip the original function
+            }
+        }
+
+        [HarmonyPatch(typeof(RepositoryManager), "Initialise", [typeof(bool)])]
+        private static class RepositoryManagerInitialisePatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(RepositoryManager __instance, bool reload, ref bool __result)
+            {
+                if (__instance._initialised && !reload)
+                {
+                    __result = true;
+                    return false; // Skip the original method
+                }
+                __instance._initialised = true;
+
+                // Array of repository instances to process
+                var repositories = new object[]
+                {
+                    // QualityRepository.Instance, purposely skipped to load in the background
+                    AreaRepository.Instance,
+                    // EventRepository.Instance, purposely skipped to load in the background
+                    ExchangeRepository.Instance,
+                    PersonaRepository.Instance,
+                    TileRulesRepository.Instance,
+                    TileRepository.Instance,
+                    TileSetRepository.Instance,
+                    CombatAttackRepository.Instance,
+                    CombatItemRepository.Instance,
+                    SpawnedEntityRepository.Instance,
+                    AssociationsRepository.Instance,
+                    TutorialRepository.Instance,
+                    NavigationConstantsRepository.Instance,
+                    CombatConstantsRepository.Instance,
+                    PromoDataRepository.Instance,
+                    FlavourRepository.Instance
+                };
+
+                var eventRepositoryMRE = new ManualResetEvent(false);
+                var qualityRepositoryMRE = new ManualResetEvent(false);
+
+                ThreadPool.QueueUserWorkItem(_ => // Load EventRepository in the background
+                {
+                    EventRepository.Instance.Load(reload);
+                    eventRepositoryMRE.Set(); // set as complete
+                });
+
+                ThreadPool.QueueUserWorkItem(_ => // Load QualityRepository in the background
+                {
+                    QualityRepository.Instance.Load(reload);
+                    qualityRepositoryMRE.Set(); // set as complete
+                });
+
+                // Call Load on all repositories using reflection
+                foreach (var repository in repositories)
+                {
+                    MethodInfo loadMethod = repository.GetType()
+                        .GetMethod("Load", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [typeof(bool)], null);
+
+                    if (loadMethod != null) loadMethod.Invoke(repository, [reload]);
+                    else Plugin.Instance.Warn($"Load method not found on {repository.GetType().Name}");
+                }
+
+                eventRepositoryMRE.WaitOne(); // Wait for EventRepository to finish loading
+                qualityRepositoryMRE.WaitOne(); // Wait for QualityRepository to finish loading
+
+                EventRepository.Instance.HydrateAll();
+                QualityRepository.Instance.HydrateAll();
+
+                // Call HydrateAll on all repositories using reflection
+                foreach (var repository in repositories)
+                {
+                    MethodInfo hydrateMethod = repository.GetType()
+                        .GetMethod("HydrateAll", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                    if (hydrateMethod != null) hydrateMethod.Invoke(repository, null);
+                    else
+                    {
+                        string repositoryName = repository.GetType().Name;
+                        var exclusionList = new[] { "NavigationConstantsRepository", "CombatConstantsRepository", "PromoDataRepository" }; // These don't have HydrateAll methods
+                        if (!exclusionList.Contains(repositoryName)) Plugin.Instance.Log($"HydrateAll method not found on {repositoryName}.");
+                    }
+                }
+
+                __result = true;
+                return false; // Skip the original method
             }
         }
     }

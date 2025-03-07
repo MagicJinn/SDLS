@@ -29,6 +29,10 @@
       <HintPath>dependencies/JsonFx.dll</HintPath>
       <Private>false</Private>      <!-- Prevent this dependency from being copied -->
     </Reference>
+    <Reference Include="FailBetter.Core">
+      <HintPath>dependencies/FailBetter.Core.dll</HintPath>
+      <Private>false</Private>      <!-- Prevent this dependency from being copied -->
+    </Reference>
 
     <!-- Include the default settings ini file as fallback -->
     <EmbeddedResource Include="SDLS_Config.ini" />

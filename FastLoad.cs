@@ -107,8 +107,9 @@ namespace SDLS
                 // Call Load on all repositories using reflection
                 foreach (var repository in repositories)
                 {
-                    MethodInfo loadMethod = repository.GetType()
-                        .GetMethod("Load", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [typeof(bool)], null);
+                    MethodInfo loadMethod = repository
+                        .GetType()
+                            .GetMethod("Load", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [typeof(bool)], null);
 
                     if (loadMethod != null) loadMethod.Invoke(repository, [reload]);
                     else Plugin.Instance.Warn($"Load method not found on {repository.GetType().Name}");
@@ -123,8 +124,9 @@ namespace SDLS
                 // Call HydrateAll on all repositories using reflection
                 foreach (var repository in repositories)
                 {
-                    MethodInfo hydrateMethod = repository.GetType()
-                        .GetMethod("HydrateAll", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    MethodInfo hydrateMethod = repository
+                        .GetType()
+                            .GetMethod("HydrateAll", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
                     if (hydrateMethod != null) hydrateMethod.Invoke(repository, null);
                     else
@@ -368,11 +370,11 @@ namespace SDLS
             {
                 // Use reflection to access protected EnsureCopiedFromDll method
                 MethodInfo method = repository
-                                        .GetType()
-                                            .GetMethod(
-                                                "EnsureCopiedFromDll",
-                                                BindingFlags.Instance |
-                                                BindingFlags.NonPublic);
+                    .GetType()
+                        .GetMethod(
+                            "EnsureCopiedFromDll",
+                            BindingFlags.Instance |
+                            BindingFlags.NonPublic);
                 if (method != null) method.Invoke(repository, null);
                 else Plugin.Instance.Warn($"EnsureCopiedFromDll failed on {repository.GetType().Name}");
             }

@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
 using Sunless.Game.ApplicationProviders;
+using Sunless.Game.Scripts.Utility;
+using System.Collections;
 
 namespace SDLS
 {
@@ -63,17 +65,28 @@ namespace SDLS
 
         private void Start()
         {
+            Niam();
+        }
+
+        // I had problems with this being run twice when it was called Main, so we renamed it to Niam
+        private void Niam()
+        {
+            if (ConfigOptions["autoImportNewStories"])
+            {
+                bool thereIsNewContent = AutoImporter.Instance.CheckForNewContent();
+                if (thereIsNewContent) return; // If new content needs to be imported, don't continue with other processes
+            }
+
             if (ConfigOptions["fastLoad"])
             {
-                // Prevent Resources.Load from being called async, by caching GameProvider
+                // Prevent Resources.Load from being called async (bad), by caching GameProvider
                 // Only required for async loading (though it does not necessarily slow down sync loading, since it's needed later)
                 _ = GameProvider.Instance;
+
                 FastLoadInitialization();
             }
             if (ConfigOptions["loadIntoSave"]) LoadIntoSaveInitialization();
         }
-
-
 
         private void JsonInitialization(ManualResetEvent jsonCompletedEvent)
         {
@@ -459,6 +472,9 @@ namespace SDLS
                 // Whether to load into a save immediately when launching the game
                 ConfigOptions["loadIntoSave"] = bool.Parse(optionsDict["loadintosave"]);
 
+                // Whether to automatically import new stories when launching the game
+                ConfigOptions["autoImportNewStories"] = bool.Parse(optionsDict["autoImportNewStories"]);
+
                 // Log the time it takes to complete certain actions in the log
                 ConfigOptions["logDebugTimers"] = bool.Parse(optionsDict["logdebugtimers"]);
             }
@@ -485,7 +501,7 @@ namespace SDLS
 
         public double DebugTimer(string name)
         {
-            // if (!ConfigOptions["logDebugTimers"]) return;
+            if (!ConfigOptions["logDebugTimers"]) return 0;
 
             if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer

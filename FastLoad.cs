@@ -15,7 +15,6 @@ using Sunless.Game.UI.Components;
 using Sunless.Game.Scripts.UI.Intro;
 using Sunless.Game.Utilities;
 
-
 namespace SDLS
 {
     internal sealed class PatchMethodsForPerformance
@@ -115,9 +114,9 @@ namespace SDLS
                     else Plugin.Instance.Warn($"Load method not found on {repository.GetType().Name}");
                 }
 
-                eventRepositoryMRE.WaitOne(); // Wait for EventRepository to finish loading
-                qualityRepositoryMRE.WaitOne(); // Wait for QualityRepository to finish loading
-
+                // Wait for these two to finish loading, then hydrate them
+                eventRepositoryMRE.WaitOne();
+                qualityRepositoryMRE.WaitOne();
                 EventRepository.Instance.HydrateAll();
                 QualityRepository.Instance.HydrateAll();
 
@@ -439,7 +438,11 @@ namespace SDLS
             yield return new WaitUntil(() => Plugin.jsonInitializationComplete && isRepositoryManagerInitComplete);
             SDLSUIAndSceneManager.Instance.EnableAllUIElements();
             SDLSUIAndSceneManager.Instance.UnmuteAndRestartBackgroundMusic();
-            StartCoroutine(DestroyProgressBar());
+
+            if (FindObjectOfType<LoadIntoSave>() == null) // Dirty check if LoadIntoSave exists
+            {
+                StartCoroutine(DestroyProgressBar());
+            }
         }
 
         private IEnumerator DestroyProgressBar()
@@ -458,8 +461,6 @@ namespace SDLS
                 moveSpeed += 0.01f;
                 yield return null;
             }
-
-            Destroy(progressBarCanvas); // Destroy the Canvas holding the progress bar
         }
 
         private IEnumerator CheckRepositoriesCoroutine(ProgressBar progressBar)

@@ -2,7 +2,7 @@
 
 SDLS is a Unity BepInEx plugin for Sunless Sea.
 
-## Sunless Data Loading Simplified (SDLS) is both a modders tool and a clientside mod that allows for Sunless Sea mod creation, without (most of) the jank. About 70% of the fields in a Sunless Sea .json are unused, and this mod allows you to safely remove them!<br><br>It also [increases loading speed](https://github.com/MagicJinn/SDLS/wiki/FastLoad), and adds quality of life features like [LoadIntoSave](https://github.com/MagicJinn/SDLS/wiki/LoadIntoSave)!
+## Sunless Data Loading Simplified (SDLS) is both a modders tool and a clientside mod that allows for Sunless Sea mod creation, without (most of) the jank. About 70% of the fields in a Sunless Sea .json are unused, and this mod allows you to safely remove them!<br><br>It also [increases loading speed](https://github.com/MagicJinn/SDLS/wiki/FastLoad), and adds quality of life features like [LoadIntoSave](https://github.com/MagicJinn/SDLS/wiki/LoadIntoSave) and [AutoImporter](https://github.com/MagicJinn/SDLS/wiki/AutoImporter)!
 
 ### **How does it work?**
 

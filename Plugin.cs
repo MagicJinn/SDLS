@@ -52,8 +52,8 @@ namespace SDLS
 
         private void Awake( /* Run by Unity on game start */ )
         {
-            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
             Instance = this;
+            Log($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
             LoadConfig();
             InitializationLine();
 
@@ -490,7 +490,7 @@ namespace SDLS
             {
                 if (stream == null)
                 {
-                    Instance.Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
                     return null; // Return null if the embedded resource doesn't exist
                 }
 
@@ -578,9 +578,9 @@ namespace SDLS
         }
 
         // Simplified log functions
-        public void Log(object message) { Logger.LogInfo(message); }
-        public void Warn(object message) { Logger.LogWarning(message); }
-        public void Error(object message) { Logger.LogError(message); }
+        public static void Log(object message) { Instance.Logger.LogInfo(message); }
+        public static void Warn(object message) { Instance.Logger.LogWarning(message); }
+        public static void Error(object message) { Instance.Logger.LogError(message); }
 #if DEBUG
         // Log functions that don't run when built in Release mode
         public void DLog(object message) { Log(message); }

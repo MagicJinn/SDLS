@@ -111,7 +111,7 @@ namespace SDLS
                             .GetMethod("Load", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [typeof(bool)], null);
 
                     if (loadMethod != null) loadMethod.Invoke(repository, [reload]);
-                    else Plugin.Instance.Warn($"Load method not found on {repository.GetType().Name}");
+                    else Plugin.Warn($"Load method not found on {repository.GetType().Name}");
                 }
 
                 // Wait for these two to finish loading, then hydrate them
@@ -132,7 +132,7 @@ namespace SDLS
                     {
                         string repositoryName = repository.GetType().Name;
                         var exclusionList = new[] { "NavigationConstantsRepository", "CombatConstantsRepository", "PromoDataRepository" }; // These don't have HydrateAll methods
-                        if (!exclusionList.Contains(repositoryName)) Plugin.Instance.Log($"HydrateAll method not found on {repositoryName}.");
+                        if (!exclusionList.Contains(repositoryName)) Plugin.Log($"HydrateAll method not found on {repositoryName}.");
                     }
                 }
 
@@ -192,7 +192,7 @@ namespace SDLS
                 keepMuted = true;
                 muteCoroutine = StartCoroutine(ForceMuteCoroutine());
             }
-            else Plugin.Instance.Warn("No background music AudioSource found to mute.");
+            else Plugin.Warn("No background music AudioSource found to mute.");
         }
 
         private IEnumerator ForceMuteCoroutine()
@@ -375,7 +375,7 @@ namespace SDLS
                             BindingFlags.Instance |
                             BindingFlags.NonPublic);
                 if (method != null) method.Invoke(repository, null);
-                else Plugin.Instance.Warn($"EnsureCopiedFromDll failed on {repository.GetType().Name}");
+                else Plugin.Warn($"EnsureCopiedFromDll failed on {repository.GetType().Name}");
             }
         }
 
@@ -387,7 +387,7 @@ namespace SDLS
                 RepositoryManager.Instance.Initialise();
             }
             catch (Exception ex)
-            { Plugin.Instance.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message); }
+            { Plugin.Error("Failed to initialize the RepositoryManager. Error: " + ex.Message); }
 
             isRepositoryManagerInitComplete = true;
             Plugin.Instance.DebugTimer("FastLoad");

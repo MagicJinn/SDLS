@@ -6,7 +6,6 @@ using UnityEngine;
 using System.Collections;
 using UnityEngine.SceneManagement;
 
-
 namespace SDLS
 {
     internal sealed class AutoImporter : MonoBehaviour
@@ -45,10 +44,18 @@ namespace SDLS
 
         public bool CheckForNewContent()
         {
-            if (!Importer.Instance.CheckIfNewContent()) return false;
+            try
+            {
+                if (!Importer.Instance.CheckIfNewContent()) return false;
 
-            Plugin.Instance.Log("New Stories available, updating them...");
-            StartCoroutine(WaitForMenuAndUpdate());
+                Plugin.Log("New Stories available, updating them...");
+                StartCoroutine(WaitForMenuAndUpdate());
+            }
+            catch
+            {
+                Plugin.Error("Something seems to have gone wrong checking for new Stories. You, or Failbetter, are offline.");
+                return false;
+            }
 
             return true;
         }
@@ -64,7 +71,7 @@ namespace SDLS
             var menuProvider = MenuProvider.Instance;
             if (menuProvider == null)
             {
-                Plugin.Instance.Error("MenuProvider.Instance is null??");
+                Plugin.Error("MenuProvider.Instance is null??");
                 yield break;
             }
 
@@ -72,14 +79,14 @@ namespace SDLS
             FieldInfo mainMenuField = typeof(MenuProvider).GetField("_mainMenu", BindingFlags.NonPublic | BindingFlags.Instance);
             if (mainMenuField == null)
             {
-                Plugin.Instance.Error("Field '_mainMenu' not found in MenuProvider??");
+                Plugin.Error("Field '_mainMenu' not found in MenuProvider??");
                 yield break;
             }
 
             // Get the MainMenu instance stored in _mainMenu
             if (mainMenuField.GetValue(menuProvider) is not MainMenu mainMenuInstance)
             {
-                Plugin.Instance.Error("_mainMenu instance is null??");
+                Plugin.Error("_mainMenu instance is null??");
                 yield break;
             }
 
@@ -87,7 +94,7 @@ namespace SDLS
             MethodInfo updateContentMethod = typeof(MainMenu).GetMethod("UpdateContent", BindingFlags.NonPublic | BindingFlags.Instance);
             if (updateContentMethod == null)
             {
-                Plugin.Instance.Error("Method 'UpdateContent' not found in MainMenu");
+                Plugin.Error("Method 'UpdateContent' not found in MainMenu");
                 yield break;
             }
 

@@ -51,7 +51,7 @@ namespace SDLS
                 Plugin.Log("New Stories available, updating them...");
                 StartCoroutine(WaitForMenuAndUpdate());
             }
-            catch
+            catch // We don't care about the error
             {
                 Plugin.Error("Something seems to have gone wrong checking for new Stories. You, or Failbetter, are offline.");
                 return false;

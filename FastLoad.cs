@@ -15,6 +15,9 @@ using Sunless.Game.UI.Components;
 using Sunless.Game.Scripts.UI.Intro;
 using Sunless.Game.Utilities;
 using Sunless.Game.ApplicationProviders;
+using System.IO;
+using Ionic.Zip;
+using System.Text;
 
 namespace SDLS
 {
@@ -30,6 +33,34 @@ namespace SDLS
 
             // Patch the RepositoryManager to load heavy hitters in the background
             Harmony.CreateAndPatchAll(typeof(RepositoryManagerInitialisePatch));
+
+            // Patch FileHelper to not overwrite existing files
+            Harmony.CreateAndPatchAll(typeof(FileHelperCopyFilesFromEmbeddedArchiveToFileSystemPatch));
+        }
+
+        [HarmonyPatch(typeof(FileHelper), "CopyFilesFromEmbeddedArchiveToFileSystem")]
+        private static class FileHelperCopyFilesFromEmbeddedArchiveToFileSystemPatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(string archivePath, string fileSystemPath)
+            {
+                Plugin.Instance.DebugTimer("CopyFilesFromEmbeddedArchiveToFileSystem");
+                FileHelper.EnsureDirectoryExists(fileSystemPath);
+                Stream manifestResourceStream = FileHelper.GetAssembly().GetManifestResourceStream(archivePath);
+                string fileSystemPath2 = GameProvider.Instance.GetApplicationPath(fileSystemPath);
+                foreach (ZipEntry zipEntry in ZipFile.Read(manifestResourceStream, new ReadOptions { Encoding = Encoding.UTF8 }))
+                {
+                    if (zipEntry.IsDirectory) continue;
+
+                    string fullPath = Path.Combine(fileSystemPath2, zipEntry.FileName);
+                    if (File.Exists(fullPath)) continue;
+
+                    FileStream stream = new FileStream(fullPath, FileMode.Create);
+                    zipEntry.Extract(stream);
+                }
+                Plugin.Instance.DebugTimer("CopyFilesFromEmbeddedArchiveToFileSystem");
+                return false; // Don't run the original start method
+            }
         }
 
         [HarmonyPatch(typeof(IntroScript), "Start")]

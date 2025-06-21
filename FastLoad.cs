@@ -14,12 +14,13 @@ using Sunless.Game.Data.S3Repositories;
 using Sunless.Game.UI.Components;
 using Sunless.Game.Scripts.UI.Intro;
 using Sunless.Game.Utilities;
+using Sunless.Game.ApplicationProviders;
 
 namespace SDLS
 {
     internal sealed class PatchMethodsForPerformance
     {
-        private static AsyncOperation backgroundTitleScreenLoad;
+        public static AsyncOperation backgroundTitleScreenLoad;
 
         public static void DoPerformancePatches()
         {
@@ -159,7 +160,6 @@ namespace SDLS
             }
         }
 
-        private const string TransitionPanelName = "TransitionPanel";
         private const float FadeDuration = 1.5f; // Fade duration in seconds
         List<Canvas> disabledCanvases = new();
 
@@ -172,7 +172,7 @@ namespace SDLS
         {
             // Filter out the transition panel
             disabledCanvases = FindObjectsOfType<Canvas>()
-                .Where(canvas => !canvas.name.Contains(TransitionPanelName))
+                .Where(canvas => !(canvas == TransitionProvider.Instance.TransitionCanvas))
                 .ToList();
 
             foreach (var canvas in disabledCanvases)
@@ -250,6 +250,8 @@ namespace SDLS
 
     internal sealed class LoadIntoSave : MonoBehaviour
     {
+        private bool _inTitleScreen = false;
+
         private void Awake()
         {
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -271,6 +273,13 @@ namespace SDLS
             {
                 yield return new WaitUntil(() => Plugin.jsonInitializationComplete); // Wait until SDLS JSON has been processed
             }
+
+            // Load into the scene as soon as we're done with SDLS jobs
+            // We need to load into the main menu, instead of just into the save, because otherwise the audio managers won't be ready yet
+            PatchMethodsForPerformance.backgroundTitleScreenLoad.allowSceneActivation = true;
+
+            yield return new WaitUntil(() => _inTitleScreen);
+
             LoadMostRecentSave();
         }
 
@@ -286,6 +295,7 @@ namespace SDLS
             // Hide UI elements when switching to the title screen
             if (scene.name == "TitleScreen")
             {
+                _inTitleScreen = true;
                 SDLSUIAndSceneManager.Instance.DisableAllUIElements();
             }
             else if (scene.name == "Loading" || scene.name == "Sailing")

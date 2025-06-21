@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
     <AssemblyName>SDLS</AssemblyName>
-    <Version>1.7.1</Version>
+    <Version>1.8.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>

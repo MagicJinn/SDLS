@@ -6,4 +6,4 @@
 *.Config
 .markdownlint.jsonc
 /BepInExBin
-*.zip
+/Archives

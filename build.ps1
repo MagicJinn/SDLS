@@ -30,7 +30,7 @@ function Find-SevenZip {
 }
 
 # Function to create zip using .NET
-function Create-ZipArchive {
+function New-ZipArchive {
     param(
         [string]$SourcePath,
         [string]$DestinationPath
@@ -47,7 +47,7 @@ function Create-ZipArchive {
 }
 
 # Function to create 7z archive
-function Create-SevenZipArchive {
+function New-SevenZipArchive {
     param(
         [string]$SourcePath,
         [string]$DestinationPath,
@@ -58,7 +58,13 @@ function Create-SevenZipArchive {
         Remove-Item $DestinationPath -Force
     }
     
-    $arguments = "a", "-t7z", $DestinationPath, "$SourcePath\*"
+    # Change to the source directory and archive contents directly
+    $currentDir = Get-Location
+    $absoluteDestinationPath = [System.IO.Path]::GetFullPath($DestinationPath)
+    Set-Location $SourcePath
+    
+    # Archive all contents in current directory (without parent folder name)
+    $arguments = @("a", "-t7z", "`"$absoluteDestinationPath`"", "*")
     
     try {
         $process = Start-Process -FilePath $SevenZipExe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
@@ -66,11 +72,15 @@ function Create-SevenZipArchive {
             Write-Host "Created: $DestinationPath" -ForegroundColor Green
         }
         else {
-            Write-Host "Failed to create 7z archive: $DestinationPath" -ForegroundColor Red
+            Write-Host "Failed to create 7z archive: $DestinationPath (Exit code: $($process.ExitCode))" -ForegroundColor Red
         }
     }
     catch {
         Write-Host "Error creating 7z archive: $_" -ForegroundColor Red
+    }
+    finally {
+        # Restore original directory
+        Set-Location $currentDir
     }
 }
 
@@ -201,29 +211,42 @@ Write-Host "Copied SDLS_config.ini to Plugin Only package root" -ForegroundColor
 
 Write-Host "`nCreating archives..." -ForegroundColor Cyan
 
+# Create archives folder
+$archivesFolder = "Archives"
+if (Test-Path $archivesFolder) {
+    Remove-Item $archivesFolder -Recurse -Force
+    Write-Host "Cleaned up existing Archives folder" -ForegroundColor Yellow
+}
+New-Item -ItemType Directory -Path $archivesFolder -Force | Out-Null
+
 # Create ZIP files
 Write-Host "Creating ZIP archives..." -ForegroundColor White
-Create-ZipArchive -SourcePath $fullPackagePath -DestinationPath "SDLS - Full.zip"
-Create-ZipArchive -SourcePath $pluginOnlyPath -DestinationPath "SDLS - Plugin Only.zip"
+New-ZipArchive -SourcePath $fullPackagePath -DestinationPath "$archivesFolder\SDLS - Full.zip"
+New-ZipArchive -SourcePath $pluginOnlyPath -DestinationPath "$archivesFolder\SDLS - Plugin Only.zip"
 
 # Create 7Z files if 7-Zip is available
 if ($use7Zip) {
-    Write-Host "`nCreating 7-Zip archives..." -ForegroundColor White
-    Create-SevenZipArchive -SourcePath $fullPackagePath -DestinationPath "SDLS - Full.7z" -SevenZipExe $SevenZipPath
-    Create-SevenZipArchive -SourcePath $pluginOnlyPath -DestinationPath "SDLS - Plugin Only.7z" -SevenZipExe $SevenZipPath
+    Write-Host "Creating 7-Zip archives..." -ForegroundColor White
+    New-SevenZipArchive -SourcePath $fullPackagePath -DestinationPath "$archivesFolder\SDLS - Full.7z" -SevenZipExe $SevenZipPath
+    New-SevenZipArchive -SourcePath $pluginOnlyPath -DestinationPath "$archivesFolder\SDLS - Plugin Only.7z" -SevenZipExe $SevenZipPath
 }
+else {
+    Write-Host "Skipping 7-Zip archives (7-Zip not available)" -ForegroundColor Yellow
+}
+
+# Clean up temporary package folders
+Write-Host "`nCleaning up temporary folders..." -ForegroundColor White
+Remove-Item $fullPackagePath -Recurse -Force
+Remove-Item $pluginOnlyPath -Recurse -Force
+Write-Host "Cleaned up package folders" -ForegroundColor Green
 
 Write-Host "`n================================" -ForegroundColor Cyan
 Write-Host "Build completed successfully!" -ForegroundColor Green
 Write-Host "================================" -ForegroundColor Cyan
 
 # List created files
-Write-Host "`nCreated files:" -ForegroundColor White
-Get-ChildItem "SDLS - Full.*" | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-Get-ChildItem "SDLS - Plugin Only.*" | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+Write-Host "`nCreated archives in '$archivesFolder' folder:" -ForegroundColor White
+Get-ChildItem $archivesFolder | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
 
-Write-Host "`nPackage folders created:" -ForegroundColor White
-Write-Host "  $fullPackagePath" -ForegroundColor Yellow
-Write-Host "  $pluginOnlyPath" -ForegroundColor Yellow
-
-Write-Host "`nNote: Package folders are left intact for inspection." -ForegroundColor Cyan
+$archiveCount = (Get-ChildItem $archivesFolder).Count
+Write-Host "`nTotal archives created: $archiveCount" -ForegroundColor Cyan

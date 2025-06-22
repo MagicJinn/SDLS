@@ -63,7 +63,7 @@ run the following command to download the necessary packages, like BepInEx.
 dotnet restore
 ```
 
-After this, you need to acquire some DLLs SDLS relies on. Create a `dependencies` folder, and find `JsonFx.dll`, `Sunless.Game.dll`, `Failbetter.Core.dll` and `UnityEngine.UI.dll` in your `SunlessSea\Sunless Sea_Data\Managed` folder. Copy them into the `dependencies` folder. After this, you should be able to compile the project with the following commands:
+After this, you need to acquire some DLLs SDLS relies on. Create a `dependencies` folder, and find `JsonFx.dll`, `Sunless.Game.dll`, `Failbetter.Core.dll`, `UnityEngine.UI.dll` and `Ionic.Zip.dll` in your `SunlessSea\Sunless Sea_Data\Managed` folder. Copy them into the `dependencies` folder. After this, you should be able to compile the project with the following commands:
 
 Build in debug mode (will include DLog):
 

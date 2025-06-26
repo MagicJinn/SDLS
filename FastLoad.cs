@@ -18,6 +18,9 @@ using Sunless.Game.ApplicationProviders;
 using System.IO;
 using Ionic.Zip;
 using System.Text;
+using Sunless.Game.Entities.Geography;
+using Sunless.Game.Scripts.UI;
+using Sunless.Game.UI.Map;
 
 namespace SDLS
 {
@@ -36,6 +39,100 @@ namespace SDLS
 
             // Patch FileHelper to not overwrite existing files
             Harmony.CreateAndPatchAll(typeof(FileHelperCopyFilesFromEmbeddedArchiveToFileSystemPatch));
+
+            // Patch the fog generation to be faster
+            Harmony.CreateAndPatchAll(typeof(MapProviderGeneratePatch));
+        }
+
+        [HarmonyPatch(typeof(MapProvider), "Generate")]
+        private static class MapProviderGeneratePatch
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(MapProvider __instance)
+            {
+                __instance._mapContainer = GameObject.Find("MapContainer");
+                if (__instance._mapContainer != null)
+                {
+                    __instance._MapTileWidth = __instance.CurrentCharacter.TileConfig.Width;
+                    __instance._MapTileHeight = __instance.CurrentCharacter.TileConfig.Height;
+                    __instance._mapWidth = __instance._MapTileWidth * __instance.MapTileHeight;
+                    __instance._mapHeight = __instance._MapTileHeight * __instance.MapTileHeight;
+                    if (__instance._mapWidth / __instance._mapHeight > __instance._aspectRatio)
+                    {
+                        __instance._mapBaseScale = new Vector2(__instance._MapTileWidth + 1, (__instance._MapTileWidth + 1f) / __instance._aspectRatio);
+                    }
+                    else
+                    {
+                        __instance._mapBaseScale = new Vector2((__instance._MapTileHeight + 1f) * __instance._aspectRatio, __instance._MapTileHeight + 1);
+                    }
+                    __instance._mapBaseSize = new Vector2(__instance._mapBaseScale.x * __instance.MapTileHeight, __instance._mapBaseScale.y * __instance.MapTileHeight);
+                    __instance.GetFogRevealPieces();
+                    GameObject gameObject = __instance._mapContainer.FindDescendant("MapBordered");
+                    gameObject.transform.localScale = new Vector3(__instance._mapBaseScale.x, __instance._mapBaseScale.y, gameObject.transform.localScale.z);
+                    __instance._mapRoot = UnityEngine.Object.Instantiate<GameObject>(PrefabHelper.Instance.Get("Map/Map"));
+                    __instance._mapRoot.name = "Map";
+                    __instance._mapRoot.transform.parent = __instance._mapContainer.transform;
+                    __instance._mapRoot.transform.Translate(-__instance._mapWidth / 2f, -__instance._mapHeight / 2f, 0f);
+                    GameObject gameObject3 = __instance._mapRoot.FindDescendant("Background");
+                    gameObject3.transform.localScale = new Vector3(__instance._MapTileWidth, __instance._MapTileHeight, 0f);
+                    Material material = gameObject3.GetComponent<Renderer>().material;
+                    if (material != null)
+                    {
+                        material.mainTextureScale = new Vector2(__instance._MapTileWidth / 2f, __instance._MapTileHeight);
+                    }
+                    GameObject gameObject4 = __instance._mapRoot.FindDescendant("Stripes");
+                    gameObject4.transform.localScale = new Vector3(__instance._MapTileWidth, __instance._MapTileHeight, 0f);
+                    Material material2 = gameObject4.GetComponent<Renderer>().material;
+                    if (material2 != null)
+                    {
+                        material2.mainTextureScale = new Vector2(__instance._MapTileWidth, __instance._MapTileHeight);
+                    }
+                    GameObject gameObject2 = __instance._mapRoot.FindDescendant("Borders");
+                    if (gameObject2 != null)
+                    {
+                        __instance.RescaleBorders(gameObject2);
+                    }
+                    __instance._mapFoU = __instance._mapRoot.FindDescendant("FoU");
+                    __instance._mapFoU.transform.localPosition = new Vector3(__instance._mapWidth / 2f, __instance._mapHeight / 2f, __instance._mapFoU.transform.localPosition.z);
+                    __instance._mapFoU.transform.localScale = new Vector3(__instance._MapTileWidth, __instance._MapTileHeight, 0f);
+                    __instance._icons = [];
+                    __instance._boatIcon = __instance._mapRoot.AddChildPreserveTransform(PrefabHelper.Instance.Get("Map/Icons/Ico_boat"));
+                    __instance._icons.Add(__instance._boatIcon);
+                    __instance._mapCamera = GameObject.Find("Map Camera").GetComponent<Camera>();
+                    __instance._tiles = [];
+                    __instance._tilesGrid = new TileInstance[__instance._MapTileHeight, __instance._MapTileWidth];
+                    __instance._terrain = [];
+                    __instance._labels = [];
+                    __instance._ports = [];
+                    __instance._labelsSmallGO = GameObject.Find("LabelsSmall");
+                    __instance._labelsSmallCanvas = __instance._labelsSmallGO.GetComponent<CanvasGroup>();
+                    __instance._labelsSmallCanvasFader = __instance._labelsSmallGO.GetComponent<CanvasFader>();
+                    __instance._labelsLargeGO = GameObject.Find("LabelsLarge");
+
+                    // Faster black pixel generation by batching it
+                    int width = 4 * __instance._MapTileWidth * 64;
+                    int height = 4 * __instance._MapTileHeight * 64;
+                    __instance._fogOfUnknown = new Texture2D(width, height)
+                    {
+                        wrapMode = TextureWrapMode.Clamp
+                    };
+                    Color[] colors = new Color[width * height];
+                    for (int i = 0; i < colors.Length; i++)
+                    {
+                        colors[i] = Color.black;
+                    }
+                    __instance._fogOfUnknown.SetPixels(colors);
+                    __instance._fogOfUnknown.Apply();
+
+                    __instance._mapControls = new MapControls(NavigationProvider.Instance.Anchors.TR);
+                    __instance.ToggleExitButton(false);
+                }
+                else
+                {
+                    Debug.Log("Map could not be found!");
+                }
+                return false; // don't run the original method
+            }
         }
 
         [HarmonyPatch(typeof(FileHelper), "CopyFilesFromEmbeddedArchiveToFileSystem")]
@@ -67,7 +164,7 @@ namespace SDLS
         private static class IntroScriptStartPatch
         {
             [HarmonyPrefix]
-            private static bool Prefix(IntroScript __instance)
+            private static bool Prefix()
             {
                 backgroundTitleScreenLoad = SceneManager.LoadSceneAsync("TitleScreen"); // Load async in the background
                 backgroundTitleScreenLoad.allowSceneActivation = false; // Prevent automatic activation
@@ -78,7 +175,7 @@ namespace SDLS
         private static class IntroScriptLoadTitleScreenPatch
         {
             [HarmonyPrefix]
-            private static bool Prefix(IntroScript __instance)
+            private static bool Prefix()
             {
                 backgroundTitleScreenLoad.allowSceneActivation = true; // Allow the scene to activate
                 return false; // Skip the original function

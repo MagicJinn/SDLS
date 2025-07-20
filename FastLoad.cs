@@ -42,6 +42,8 @@ namespace SDLS
 
             // Patch the fog generation to be faster
             Harmony.CreateAndPatchAll(typeof(MapProviderGeneratePatch));
+
+            // SetupTerrain in SurfaceManager is a heavy hitter
         }
 
         [HarmonyPatch(typeof(MapProvider), "Generate")]
@@ -541,11 +543,15 @@ namespace SDLS
             {
                 StartCoroutine(HideUIUntilInitComplete());
             }
+            else
+            {
+                DestroyProgressBar();
+            }
         }
 
         private IEnumerator RepositoryLoadProgressbar()
         {
-            // Create a new Canvas for the progress bar, since all other canvases are disabled
+            // Create a new Canvas for the progress bar, since all other canvases are disabled by us
             progressBarCanvas = new GameObject("ProgressBarCanvas");
             var canvas = progressBarCanvas.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -558,6 +564,9 @@ namespace SDLS
 
             var progressbarRectTransformInner = progressBar.InnerGameObject.GetComponent<RectTransform>();
             if (progressbarRectTransformInner.rect.width == 0 || progressbarRectTransformInner.rect.height == 0) yield return new WaitForEndOfFrame(); // Wait until the next frame for RectTransform to be initialized
+
+            if (progressBarCanvas == null) yield break; // Progress bar has been destroyed while we were waiting. Nothing to do.
+
             float progressBarWidth = progressbarRectTransformInner.rect.width;
             float progressBarHeight = progressbarRectTransformInner.rect.height;
 
@@ -582,11 +591,11 @@ namespace SDLS
 
             if (FindObjectOfType<LoadIntoSave>() == null) // Dirty check if LoadIntoSave exists
             {
-                StartCoroutine(DestroyProgressBar());
+                StartCoroutine(SunsetProgressBar());
             }
         }
 
-        private IEnumerator DestroyProgressBar()
+        private IEnumerator SunsetProgressBar()
         {
             progressBar.Message = "Loading complete!";
             float moveSpeed = 0f;
@@ -602,6 +611,13 @@ namespace SDLS
                 moveSpeed += 0.01f;
                 yield return null;
             }
+            DestroyProgressBar();
+        }
+
+        private void DestroyProgressBar()
+        {
+            Destroy(progressBarCanvas);
+            progressBarCanvas = null;
         }
 
         private IEnumerator CheckRepositoriesCoroutine(ProgressBar progressBar)

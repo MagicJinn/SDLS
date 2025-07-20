@@ -341,8 +341,11 @@ namespace SDLS
                 muteCoroutine = null; // Delete muteCoroutine
             }
 
-            backgroundMusic.volume = 1f; // Reset original volume
-            backgroundMusic.time = 0f; // Reset to the beginning of the track
+            if (backgroundMusic != null)
+            {
+                backgroundMusic.volume = 1f; // Reset original volume
+                backgroundMusic.time = 0f; // Reset to the beginning of the track
+            }
         }
 
         public void EnableAllUIElements()

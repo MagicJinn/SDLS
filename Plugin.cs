@@ -239,6 +239,18 @@ namespace SDLS
                         : HandleDefault(tracedValue); // No
             }
 
+            // Fully inflate all default values
+            foreach (var kvp in mergeJSONObj)
+            {
+                string defaultKey = kvp.Key;
+                bool isValidComponent = componentNames.Contains(defaultKey);
+
+                if (isValidComponent && mergeJSONObjCopy[defaultKey] is Dictionary<string, object> existingDict && existingDict.Count == 0)
+                {
+                    mergeJSONObjCopy[defaultKey] = HandleComponent(kvp.Value, defaultKey);
+                }
+            }
+
             return mergeJSONObjCopy;
         }
 

@@ -9,8 +9,8 @@ namespace SDLS
 {
     internal static class JSON
     {
-        private static readonly JsonReader JSONReader = new JsonReader();
-        private static readonly JsonWriter JSONWriter = new JsonWriter();
+        private static readonly JsonReader JSONReader = new();
+        private static readonly JsonWriter JSONWriter = new();
 
         public static string ReadFileSystemJson(string fullFilePath)
         {
@@ -47,12 +47,14 @@ namespace SDLS
             return serializedData;
         }
 
-        public static Dictionary<string, object> Deserialize(string strObj)
+        public static Dictionary<string, object> Deserialize(string strObj) => Deserialize<Dictionary<string, object>>(strObj);
+        public static T Deserialize<T>(string strObj)
         {
-            var deserializedData = JSONReader.Read<Dictionary<string, object>>(strObj);
+            var deserializedData = JSONReader.Read<T>(strObj);
             return deserializedData;
         }
 
+        // This is extremely stupid but it works so who fucking cares
         public static string[] SplitJSON(string strObjJoined)
         {
             var jsonObjects = new List<string>();
@@ -61,7 +63,7 @@ namespace SDLS
                 if (strObjJoined[i] == '{' && depth++ == 0) start = i;
                 if (strObjJoined[i] == '}' && --depth == 0) jsonObjects.Add(strObjJoined.Substring(start, i - start + 1));
             }
-            string[] jsonObjectsArray = jsonObjects.ToArray();
+            string[] jsonObjectsArray = [.. jsonObjects];
             return jsonObjectsArray;
         }
 
@@ -108,24 +110,24 @@ namespace SDLS
             return sb.ToString();
         }
 
-        public static string[] GetFilePaths() => new[]
-        {
-        "entities/qualities",
-        "entities/areas",
-        "entities/events",
-        "entities/exchanges",
-        "entities/personas",
-        "geography/TileRules",
-        "geography/Tiles",
-        "geography/TileSets",
-        "encyclopaedia/CombatAttacks",
-        "encyclopaedia/CombatItems",
-        "encyclopaedia/SpawnedEntities",
-        "encyclopaedia/Associations",
-        "encyclopaedia/Tutorials",
-        "encyclopaedia/Flavours",
-        "constants/combatconstants",
-        "constants/navigationconstants"
-        };
+        public static string[] GetFilePaths() =>
+        [
+            "entities/qualities",
+            "entities/areas",
+            "entities/events",
+            "entities/exchanges",
+            "entities/personas",
+            "geography/TileRules",
+            "geography/Tiles",
+            "geography/TileSets",
+            "encyclopaedia/CombatAttacks",
+            "encyclopaedia/CombatItems",
+            "encyclopaedia/SpawnedEntities",
+            "encyclopaedia/Associations",
+            "encyclopaedia/Tutorials",
+            "encyclopaedia/Flavours",
+            "constants/combatconstants",
+            "constants/navigationconstants"
+        ];
     }
 }

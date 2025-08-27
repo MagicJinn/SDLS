@@ -8,8 +8,6 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
 using Sunless.Game.ApplicationProviders;
-using Sunless.Game.Scripts.Utility;
-using System.Collections;
 
 namespace SDLS
 {
@@ -25,8 +23,8 @@ namespace SDLS
         private static Assembly Assembly { get; } = Assembly.GetExecutingAssembly();
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
-        private Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
-        private bool TilesSpecialCase = false; // Variable for the special case of Tiles.json. Check GetAComponent for more info
+        private static Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
+        private static bool TilesSpecialCase = false; // Variable for the special case of Tiles.json. Check GetAComponent for more info
 
         private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
         private List<string> conflictLog = new(); // List of conflicts
@@ -57,6 +55,7 @@ namespace SDLS
             LoadConfig();
             InitializationLine();
 
+            Fixes.DoMiscFixes();
             PatchMethodsForPerformance.DoPerformancePatches();
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
@@ -393,7 +392,7 @@ namespace SDLS
             return components;
         }
 
-        private Dictionary<string, object> GetAComponent(string name)
+        private static Dictionary<string, object> GetAComponent(string name)
         {
             string componentName = name;
             if (!componentCache.ContainsKey(componentName))

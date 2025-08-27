@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
 using Sunless.Game.ApplicationProviders;
+using UnityEngine.SceneManagement;
+using System.Collections;
 
 namespace SDLS
 {
@@ -16,22 +18,23 @@ namespace SDLS
     {
         // Config options
         private const string CONFIG_FILENAME = "SDLS_Config.ini";
-        private Dictionary<string, bool> ConfigOptions = new(); // Gets filled in by LoadConfig
+        private static readonly Dictionary<string, bool> ConfigOptions = []; // Gets filled in by LoadConfig
         // Config options end
 
         public static string PersistentDataPath { get; } = Application.persistentDataPath;
         private static Assembly Assembly { get; } = Assembly.GetExecutingAssembly();
 
         private HashSet<string> componentNames; // Contains the names of all the JSON defaults
-        private static Dictionary<string, Dictionary<string, object>> componentCache = new(); // Cache for loaded components
+        private static readonly Dictionary<string, Dictionary<string, object>> componentCache = []; // Cache for loaded components
         private static bool TilesSpecialCase = false; // Variable for the special case of Tiles.json. Check GetAComponent for more info
 
         private string currentModName; // Variable for tracking which mod is currently being merged. Used for logging conflicts
-        private List<string> conflictLog = new(); // List of conflicts
-        private Dictionary<string, Stopwatch> DebugTimers = new(); // List of Debug timers, used by DebugTimer()
+        private readonly List<string> conflictLog = []; // List of conflicts
+        private static readonly Dictionary<string, Stopwatch> _debugTimers = []; // List of Debug timers, used by DebugTimer()
+        private static readonly Dictionary<string, double> _totals = [];
 
 
-        private Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = new();
+        private readonly Dictionary<string, Dictionary<int, Dictionary<string, object>>> mergedModsDict = [];
         // Dictionary structure breakdown:
         // - string: Represents the filename or category (eg events.json).
         //    - Dictionary<int, Dictionary<string, object>>: 
@@ -42,11 +45,11 @@ namespace SDLS
 
 
         // Tracks every file SDLS creates. Used during cleanup
-        private List<string> createdFiles = new();
+        private readonly List<string> createdFiles = [];
         public static Plugin Instance { get; private set; }
         public static bool jsonInitializationComplete = false;
         private FastLoad fastLoader;
-        private LoadIntoSave saveLoader;
+        private static LoadIntoSave saveLoader;
 
         private void Awake( /* Run by Unity on game start */ )
         {
@@ -60,6 +63,21 @@ namespace SDLS
 
             var jsonCompletedEvent = new ManualResetEvent(false); // Track whether JsonInitialization is complete
             ThreadPool.QueueUserWorkItem(state => JsonInitialization(jsonCompletedEvent)); // Start JSON Initialization Async
+
+#if DEBUG
+            SceneManager.activeSceneChanged += OnSceneChanged;
+        }
+
+        private void OnSceneChanged(Scene _current, Scene _next)
+        {
+            StartCoroutine(Wait1Second());
+        }
+
+        private IEnumerator Wait1Second()
+        {
+            yield return new WaitForSeconds(2f);
+            LogAllDebugTimers();
+#endif
         }
 
         private void Start()
@@ -159,7 +177,7 @@ namespace SDLS
                             string fullRelativePath = Path.Combine(modFolderInAddon, filePath);
 
                             string fileContent = JSON.ReadFileSystemJson(fullRelativePath + ".sdls"); // Attempt to read the file with ".sdls" extension
-                            if (fileContent == null) fileContent = JSON.ReadFileSystemJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
+                            fileContent ??= JSON.ReadFileSystemJson(fullRelativePath + "SDLS.json"); // Attempt to read the file with "SDLS.json" extension only if .sdls file is not found
 
                             if (fileContent != null)
                             {
@@ -183,7 +201,8 @@ namespace SDLS
                         {
                             Error($"Error processing file {filePath}: {ex.Message}");
                         }
-                    };
+                    }
+                    ;
                 }
             }
         }
@@ -281,7 +300,7 @@ namespace SDLS
         {
             if (fieldValue is Dictionary<string, object> nestedJSON)
             {
-                return ApplyFieldsToMold(nestedJSON, new Dictionary<string, object>());
+                return ApplyFieldsToMold(nestedJSON, []);
             }
             else if (fieldValue is IEnumerable<object> array)
             {
@@ -322,7 +341,7 @@ namespace SDLS
 
         private string FindPrimaryKey(Dictionary<string, object> JSONObj)
         {
-            string[] keys = { "AssociatedQualityId", "Id", "Name" };
+            string[] keys = ["AssociatedQualityId", "Id", "Name"];
 
             foreach (string key in keys)
             {
@@ -339,16 +358,16 @@ namespace SDLS
 
         public static string GetLastWord(string str)
         {
-            if (str.IndexOfAny(new char[] { '/', '\\' }) == -1) return str; // No separators found, return the original string
+            if (str.IndexOfAny(['/', '\\']) == -1) return str; // No separators found, return the original string
 
-            string result = str.Split(new char[] { '/', '\\' }).Last();
+            string result = str.Split(['/', '\\']).Last();
 
             return result;
         }
 
         public static string GetParentPath(string filePath)
         {
-            int lastIndex = filePath.LastIndexOfAny(new char[] { '/', '\\' });
+            int lastIndex = filePath.LastIndexOfAny(['/', '\\']);
 
             // Return the substring from the start of the string up to the last directory separator
             return filePath.Substring(0, lastIndex + 1);
@@ -453,7 +472,7 @@ namespace SDLS
                 Warn("Config not found or corrupt, using default values.");
                 string file = ReadTextResource(GetEmbeddedPath() + CONFIG_FILENAME); // Get the default config from the embedded resources
 
-                lines = file.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
+                lines = file.Split([Environment.NewLine], StringSplitOptions.RemoveEmptyEntries); // Split the file into lines
             }
 
             var optionsDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -464,14 +483,14 @@ namespace SDLS
                     if (line.Contains('=')) // Check if the line contains an '=' character so it's a valid config line
                     {
                         // Remove all spaces from the line and split it at the first occurrence of '=' into two parts
-                        string[] keyValue = line.Replace(" ", "").Split(new[] { '=' }, 2);
+                        string[] keyValue = line.Replace(" ", "").Split(['='], 2);
                         optionsDict[keyValue[0]] = keyValue[1]; // Add the key and value to the dictionary
                     }
                 }
 
                 ConfigOptions["doMerge"] = bool.Parse(optionsDict["domerge"]);
-                ConfigOptions["logConflicts"] = ConfigOptions["doMerge"] ? bool.Parse(optionsDict["logmergeconflicts"]) : false;
-                ConfigOptions["basegamemerge"] = ConfigOptions["doMerge"] ? bool.Parse(optionsDict["basegamemerge"]) : false;
+                ConfigOptions["logConflicts"] = ConfigOptions["doMerge"] && bool.Parse(optionsDict["logmergeconflicts"]);
+                ConfigOptions["basegamemerge"] = ConfigOptions["doMerge"] && bool.Parse(optionsDict["basegamemerge"]);
 
                 // Prevents issues with mod managers by removing all SDLS-created files on exit
                 ConfigOptions["doCleanup"] = bool.Parse(optionsDict["docleanup"]);
@@ -497,40 +516,61 @@ namespace SDLS
 
         public static string ReadTextResource(string fullResourceName)
         {
-            using (Stream stream = Assembly.GetManifestResourceStream(fullResourceName))
+            using Stream stream = Assembly.GetManifestResourceStream(fullResourceName);
+            if (stream == null)
             {
-                if (stream == null)
-                {
-                    Warn("Tried to get resource that doesn't exist: " + fullResourceName);
-                    return null; // Return null if the embedded resource doesn't exist
-                }
+                Warn("Tried to get resource that doesn't exist: " + fullResourceName);
+                return null; // Return null if the embedded resource doesn't exist
+            }
 
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd(); // Read and return the embedded resource
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd(); // Read and return the embedded resource
+        }
+
+        private static void LogAllDebugTimers()
+        {
+            foreach (var total in _totals)
+            {
+                Log($"Total time for {total.Key}: {total.Value / 1000f:F3} seconds.");
             }
         }
 
-        public double DebugTimer(string name)
+        public static double DebugTimer(string name, bool batchTimer = false)
         {
-            if (!ConfigOptions["logDebugTimers"]) return 0;
+            if (!ConfigOptions["logDebugTimers"]) return -1;
 
-            if (!DebugTimers.TryGetValue(name, out Stopwatch stopwatch))
+            if (!_debugTimers.TryGetValue(name, out Stopwatch stopwatch))
             { // Start a new timer
                 Log($"Starting process {name}");
                 stopwatch = new Stopwatch();
                 stopwatch.Start();
-                DebugTimers[name] = stopwatch;
+                _debugTimers[name] = stopwatch;
             }
             else if (stopwatch.IsRunning)
-            { // Stop the timer and log the result
+            {
+                // Stop the timer and log the result
                 stopwatch.Stop();
-                Log($"Finished process {name}. Took {stopwatch.Elapsed.TotalSeconds:F3} seconds.");
+                if (batchTimer)
+                {
+                    _totals[name] = stopwatch.ElapsedMilliseconds;
+                }
+                else
+                {
+                    Log($"Finished process {name}. Took {stopwatch.Elapsed.TotalSeconds:F3} seconds.");
+                }
                 return stopwatch.Elapsed.TotalSeconds;
             }
             else
             { // Removes the timer and starts it again
-                DebugTimers.Remove(name);
-                DebugTimer(name);
+                if (batchTimer)
+                {
+                    stopwatch.Start();
+                }
+                else
+                {
+                    _debugTimers.Remove(name);
+                    DebugTimer(name);
+                }
             }
             return -1; // Return -1 because not every operation needs to return a value
         }
@@ -562,7 +602,7 @@ namespace SDLS
 
         private void InitializationLine()
         {
-            string[] lines = {
+            string[] lines = [
             "Querrying ChatGPT for better JSON.",
             "Help! If you're seeing this, I'm the guy he trapped within this program to rewrite your JSON!.",
             "This is an alternate line 3.",
@@ -582,7 +622,9 @@ namespace SDLS
             "Screw it. Grok, give me some more jokes for the JSON.",
             "\nCan you guess where the JSON goes?\nThat's right!\nIt goes in the square hole!",
             "You merely adopted the JSON. I was born in it, molded by it.",
-            };
+            "I should probably remake Sunless Sea at this point.",
+            "The great JSON replacement theory."
+            ];
 
             string line = lines[new System.Random().Next(0, lines.Length)];
             Log(line + "\n");

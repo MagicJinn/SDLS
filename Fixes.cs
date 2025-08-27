@@ -10,11 +10,11 @@ namespace SDLS
     {
         public static void DoMiscFixes()
         {
-            Harmony.CreateAndPatchAll(typeof(PatchBaseCollectionRepositoryGet));
+            Harmony.CreateAndPatchAll(typeof(BaseCollectionRepositoryGetPatch));
         }
 
         [HarmonyPatch]
-        private static class PatchBaseCollectionRepositoryGet
+        private static class BaseCollectionRepositoryGetPatch
         {
             private static MethodBase TargetMethod() // I do not understand this
             {

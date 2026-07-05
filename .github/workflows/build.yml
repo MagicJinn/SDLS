@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build and package
+        shell: pwsh
+        run: .\build.ps1 -SevenZipPath "${env:ProgramFiles}\7-Zip\7z.exe"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdls-build
+          path: |
+            bin/Release/net35/SDLS.dll
+            Archives/SDLS - Full.7z
+            Archives/SDLS - Full.zip
+            Archives/SDLS - Plugin Only.7z
+            Archives/SDLS - Plugin Only.zip

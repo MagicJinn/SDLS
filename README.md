@@ -63,7 +63,17 @@ run the following command to download the necessary packages, like BepInEx.
 dotnet restore
 ```
 
-After this, you need to acquire some DLLs SDLS relies on. Create a `dependencies` folder, and find `JsonFx.dll`, `Sunless.Game.dll`, `Failbetter.Core.dll`, `UnityEngine.UI.dll` and `Ionic.Zip.dll` in your `SunlessSea\Sunless Sea_Data\Managed` folder. Copy them into the `dependencies` folder. After this, you should be able to compile the project with the following commands:
+The repo includes stripped **reference assemblies** in `dependencies/`. These contain type and member signatures only (no game IL), so you can compile without copying proprietary DLLs from your game install.
+
+If Failbetter ships a game update that changes the API SDLS uses, maintainers can regenerate the references from a local install:
+
+```powershell
+.\tools\strip-refs.ps1 -GameManagedPath "C:\Path\To\Sunless Sea\Sunless Sea_Data\Managed"
+```
+
+That script copies the real DLLs into gitignored `dependencies/source/`, runs [Refasmer](https://github.com/JetBrains/Refasmer) to strip method bodies, and writes the results back to `dependencies/`.
+
+You should be able to compile the project with the following commands:
 
 Build in debug mode (will include DLog):
 

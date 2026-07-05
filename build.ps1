@@ -84,9 +84,38 @@ function New-SevenZipArchive {
     }
 }
 
+function Install-BepInEx {
+    param(
+        [string]$Destination = "BepInExBin"
+    )
+
+    Write-Host "Downloading latest BepInEx (win x86)..." -ForegroundColor White
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/BepInEx/BepInEx/releases/latest"
+    $asset = $release.assets | Where-Object { $_.name -like "BepInEx_win_x86_*" } | Select-Object -First 1
+
+    if (-not $asset) {
+        throw "Could not find BepInEx_win_x86 asset in release $($release.tag_name)"
+    }
+
+    Write-Host "Using $($asset.name) from $($release.tag_name)" -ForegroundColor Green
+
+    $zipPath = Join-Path $env:TEMP "BepInEx_win_x86.zip"
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+
+    if (Test-Path $Destination) {
+        Remove-Item $Destination -Recurse -Force
+    }
+
+    Expand-Archive -Path $zipPath -DestinationPath $Destination -Force
+    Remove-Item $zipPath -Force
+    Write-Host "Extracted BepInEx to $Destination" -ForegroundColor Green
+}
+
 # Main script starts here
 Write-Host "SDLS Build Script Starting..." -ForegroundColor Cyan
 Write-Host "================================" -ForegroundColor Cyan
+
+Install-BepInEx
 
 # Build the project first
 Write-Host "Building project..." -ForegroundColor White
@@ -110,7 +139,7 @@ Write-Host ""
 
 # Check if required files exist
 $dllPath = "bin\Release\net35\SDLS.dll"
-$configPath = "SDLS_config.ini"
+$configPath = "SDLS_Config.ini"
 $bepInExBinPath = "BepInExBin"
 
 if (-not (Test-Path $dllPath)) {
@@ -135,7 +164,7 @@ if ([string]::IsNullOrEmpty($SevenZipPath)) {
     $SevenZipPath = Find-SevenZip
 }
 
-if ([string]::IsNullOrEmpty($SevenZipPath)) {
+if ([string]::IsNullOrEmpty($SevenZipPath) -and -not $env:CI -and -not $env:GITHUB_ACTIONS) {
     $SevenZipPath = Read-Host "Please enter the full path to 7z.exe (or press Enter to skip 7z creation)"
 }
 

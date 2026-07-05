@@ -1,10 +1,12 @@
 
 /bin
 /obj
-/dependencies
 *.sln
 *.Config
+!NuGet.Config
 .markdownlint.jsonc
 /BepInExBin
 /Archives
 /.vscode
+/dependencies/source
+/dependencies/refs-temp

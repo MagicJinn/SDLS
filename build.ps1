@@ -128,21 +128,12 @@ Install-BepInEx
 
 # Build the project first
 Write-Host "Building project..." -ForegroundColor White
-try {
-    $buildProcess = Start-Process -FilePath "dotnet" -ArgumentList "build", "-c", "Release", "-p:Optimize=true" -Wait -PassThru -NoNewWindow
-    if ($buildProcess.ExitCode -eq 0) {
-        Write-Host "Project built successfully!" -ForegroundColor Green
-    }
-    else {
-        Write-Host "Build failed with exit code: $($buildProcess.ExitCode)" -ForegroundColor Red
-        exit 1
-    }
-}
-catch {
-    Write-Host "Error running dotnet build: $_" -ForegroundColor Red
-    Write-Host "Make sure .NET SDK is installed and accessible from PATH" -ForegroundColor Yellow
+& dotnet build -c Release -p:Optimize=true --disable-build-servers
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
     exit 1
 }
+Write-Host "Project built successfully!" -ForegroundColor Green
 
 Write-Host ""
 

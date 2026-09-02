@@ -98,21 +98,18 @@ function New-SevenZipArchive {
 
 function Install-BepInEx {
     param(
-        [string]$Destination = "BepInExBin"
+        [string]$Destination = "BepInExBin",
+        [string]$Version = "5.4.23.5"
     )
 
-    Write-Host "Downloading latest BepInEx (win x64)..." -ForegroundColor White
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/BepInEx/BepInEx/releases/latest"
-    $asset = $release.assets | Where-Object { $_.name -like "BepInEx_win_x64_*" } | Select-Object -First 1
+    $zipName = "BepInEx_win_x64_$Version.zip"
+    $url = "https://github.com/BepInEx/BepInEx/releases/download/v$Version/$zipName"
 
-    if (-not $asset) {
-        throw "Could not find BepInEx_win_x64 asset in release $($release.tag_name)"
-    }
-
-    Write-Host "Using $($asset.name) from $($release.tag_name)" -ForegroundColor Green
+    Write-Host "Downloading BepInEx $Version (win x64)..." -ForegroundColor White
+    Write-Host "Using $zipName" -ForegroundColor Green
 
     $zipPath = Join-Path $env:TEMP "SDLS_BepInEx_win_x64.zip"
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
 
     if (Test-Path $Destination) {
         Remove-Item $Destination -Recurse -Force

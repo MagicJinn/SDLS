@@ -5,6 +5,18 @@ param(
     [string]$SevenZipPath = ""
 )
 
+Set-Location $PSScriptRoot
+
+function Resolve-RepoPath {
+    param([string]$Path)
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+
+    return Join-Path $PSScriptRoot $Path
+}
+
 # Function to find 7-Zip installation
 function Find-SevenZip {
     $commonPaths = @(
@@ -39,10 +51,10 @@ function New-ZipArchive {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     
     if (Test-Path $DestinationPath) {
-        Remove-Item $DestinationPath -Force
+        Remove-Item (Resolve-RepoPath $DestinationPath) -Force
     }
     
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($SourcePath, $DestinationPath)
+    [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-RepoPath $SourcePath), (Resolve-RepoPath $DestinationPath))
     Write-Host "Created: $DestinationPath" -ForegroundColor Green
 }
 
@@ -55,13 +67,13 @@ function New-SevenZipArchive {
     )
     
     if (Test-Path $DestinationPath) {
-        Remove-Item $DestinationPath -Force
+        Remove-Item (Resolve-RepoPath $DestinationPath) -Force
     }
     
     # Change to the source directory and archive contents directly
     $currentDir = Get-Location
-    $absoluteDestinationPath = [System.IO.Path]::GetFullPath($DestinationPath)
-    Set-Location $SourcePath
+    $absoluteDestinationPath = Resolve-RepoPath $DestinationPath
+    Set-Location (Resolve-RepoPath $SourcePath)
     
     # Archive all contents in current directory (without parent folder name)
     $arguments = @("a", "-t7z", "`"$absoluteDestinationPath`"", "*")
@@ -89,17 +101,17 @@ function Install-BepInEx {
         [string]$Destination = "BepInExBin"
     )
 
-    Write-Host "Downloading latest BepInEx (win x86)..." -ForegroundColor White
+    Write-Host "Downloading latest BepInEx (win x64)..." -ForegroundColor White
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/BepInEx/BepInEx/releases/latest"
-    $asset = $release.assets | Where-Object { $_.name -like "BepInEx_win_x86_*" } | Select-Object -First 1
+    $asset = $release.assets | Where-Object { $_.name -like "BepInEx_win_x64_*" } | Select-Object -First 1
 
     if (-not $asset) {
-        throw "Could not find BepInEx_win_x86 asset in release $($release.tag_name)"
+        throw "Could not find BepInEx_win_x64 asset in release $($release.tag_name)"
     }
 
     Write-Host "Using $($asset.name) from $($release.tag_name)" -ForegroundColor Green
 
-    $zipPath = Join-Path $env:TEMP "BepInEx_win_x86.zip"
+    $zipPath = Join-Path $env:TEMP "SDLS_BepInEx_win_x64.zip"
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
 
     if (Test-Path $Destination) {
